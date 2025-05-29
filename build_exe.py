@@ -9,26 +9,37 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+import io
 
 def clean_build_dirs():
     """Bereinigt alte Build-Verzeichnisse"""
-    dirs_to_clean = ['build', 'dist', '__pycache__']
+    dirs_to_clean = ['dist', 'build', '__pycache__']
+    
     for dir_name in dirs_to_clean:
-        if os.path.exists(dir_name):
-            shutil.rmtree(dir_name)
-            print(f"✓ {dir_name} bereinigt")
+        dir_path = Path(dir_name)
+        if dir_path.exists():
+            shutil.rmtree(dir_path)
+            print(f"[CLEAN] {dir_name}/ geloescht")
+    
+    # Spec-Dateien löschen
+    spec_files = ['launcher.spec']
+    for spec_file in spec_files:
+        spec_path = Path(spec_file)
+        if spec_path.exists():
+            spec_path.unlink()
+            print(f"[CLEAN] {spec_file} geloescht")
 
 def create_spec_files():
-    """Erstellt PyInstaller .spec Dateien für bessere Kontrolle"""
+    """Erstellt PyInstaller .spec Datei für den Launcher"""
     
-    # Haupt-Bot Spec
-    main_spec = """
+    # Launcher Spec (startet beide Bots)
+    launcher_spec = """
 # -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
 
 a = Analysis(
-    ['main.py'],
+    ['launcher.py'],
     pathex=[],
     binaries=[],
     datas=[
@@ -37,6 +48,8 @@ a = Analysis(
         ('core', 'core'),
         ('utils', 'utils'),
         ('bot_status.py', '.'),
+        ('main.py', '.'),
+        ('helper_bot.py', '.'),
         ('.env.example', '.'),
         ('README.md', '.'),
         ('LICENSE', '.'),
@@ -52,6 +65,9 @@ a = Analysis(
         'time',
         'datetime',
         'aiohttp',
+        'threading',
+        'subprocess',
+        'multiprocessing',
     ],
     hookspath=[],
     hooksconfig={},
@@ -70,7 +86,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='DetektivPikachu-MainBot',
+    name='DetektivPikachu-Launcher',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -81,7 +97,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='assets/pikachu.ico' if os.path.exists('assets/pikachu.ico') else None,
+    icon='detective_pikachu_bot_icon.ico' if os.path.exists('detective_pikachu_bot_icon.ico') else None,
 )
 
 coll = COLLECT(
@@ -92,124 +108,37 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='DetektivPikachu-MainBot',
+    name='DetektivPikachu-Launcher',
 )
 """
 
-    # Helper-Bot Spec
-    helper_spec = """
-# -*- mode: python ; coding: utf-8 -*-
-
-block_cipher = None
-
-a = Analysis(
-    ['helper_bot.py'],
-    pathex=[],
-    binaries=[],
-    datas=[
-        ('config', 'config'),
-        ('core', 'core'),
-        ('utils', 'utils'),
-        ('bot_status.py', '.'),
-        ('.env.example', '.'),
-    ],
-    hiddenimports=[
-        'discord',
-        'discord.ext.commands',
-        'asyncio',
-        'pathlib',
-        'logging',
-        'json',
-        'os',
-        'time',
-        'datetime',
-        'aiohttp',
-    ],
-    hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
-    excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
-    noarchive=False,
-)
-
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
-exe = EXE(
-    pyz,
-    a.scripts,
-    [],
-    exclude_binaries=True,
-    name='DetektivPikachu-HelperBot',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    console=True,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon='assets/pikachu.ico' if os.path.exists('assets/pikachu.ico') else None,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='DetektivPikachu-HelperBot',
-)
-"""
-
-    with open('main_bot.spec', 'w', encoding='utf-8') as f:
-        f.write(main_spec)
+    with open('launcher.spec', 'w', encoding='utf-8') as f:
+        f.write(launcher_spec)
     
-    with open('helper_bot.spec', 'w', encoding='utf-8') as f:
-        f.write(helper_spec)
-    
-    print("✓ .spec Dateien erstellt")
+    print("[SPEC] Launcher.spec Datei erstellt")
 
 def build_executables():
-    """Erstellt die EXE-Dateien mit PyInstaller"""
+    """Erstellt die Launcher-EXE-Datei mit PyInstaller"""
     
-    print("🚀 Starte EXE-Build-Prozess...")
+    print("[BUILD] Starte EXE-Build-Prozess...")
     
-    # Haupt-Bot bauen
-    print("📦 Baue Haupt-Bot...")
+    # Nur Launcher bauen (All-in-One EXE)
+    print("[BUILD] Baue Detektiv Pikachu Launcher (All-in-One)...")
     result = subprocess.run([
         sys.executable, '-m', 'PyInstaller',
         '--clean',
-        'main_bot.spec'
+        'launcher.spec'
     ], capture_output=True, text=True)
     
     if result.returncode != 0:
-        print(f"❌ Fehler beim Bauen des Haupt-Bots: {result.stderr}")
+        print(f"[ERROR] Fehler beim Bauen des Launchers: {result.stderr}")
         return False
     
-    # Helper-Bot bauen
-    print("📦 Baue Helper-Bot...")
-    result = subprocess.run([
-        sys.executable, '-m', 'PyInstaller',
-        '--clean', 
-        'helper_bot.spec'
-    ], capture_output=True, text=True)
-    
-    if result.returncode != 0:
-        print(f"❌ Fehler beim Bauen des Helper-Bots: {result.stderr}")
-        return False
-    
-    print("✅ EXE-Dateien erfolgreich erstellt!")
+    print("[SUCCESS] Launcher-EXE erfolgreich erstellt!")
     return True
 
 def create_release_package():
-    """Erstellt ein Release-Paket mit allen notwendigen Dateien"""
+    """Erstellt ein minimales Release-Paket"""
     
     release_dir = Path('release')
     if release_dir.exists():
@@ -217,17 +146,23 @@ def create_release_package():
     
     release_dir.mkdir()
     
-    # EXE-Dateien kopieren
-    main_exe_dir = Path('dist/DetektivPikachu-MainBot')
-    helper_exe_dir = Path('dist/DetektivPikachu-HelperBot')
+    # Haupt-Launcher kopieren
+    launcher_exe_dir = Path('dist/DetektivPikachu-Launcher')
+    if launcher_exe_dir.exists():
+        # Kopiere die EXE direkt ins Release-Verzeichnis
+        shutil.copy(launcher_exe_dir / 'DetektivPikachu-Launcher.exe', release_dir / 'DetektivPikachu.exe')
+        
+        # Kopiere notwendige DLLs/Dependencies
+        for file in launcher_exe_dir.glob('*'):
+            if file.is_file() and file.name != 'DetektivPikachu-Launcher.exe':
+                shutil.copy(file, release_dir / file.name)
+        
+        # Kopiere _internal Verzeichnis falls vorhanden
+        internal_dir = launcher_exe_dir / '_internal'
+        if internal_dir.exists():
+            shutil.copytree(internal_dir, release_dir / '_internal')
     
-    if main_exe_dir.exists():
-        shutil.copytree(main_exe_dir, release_dir / 'MainBot')
-    
-    if helper_exe_dir.exists():
-        shutil.copytree(helper_exe_dir, release_dir / 'HelperBot')
-    
-    # Externe Konfigurationsverzeichnisse erstellen
+    # Konfigurationsverzeichnis erstellen
     config_dir = release_dir / 'config'
     data_dir = release_dir / 'data'
     
@@ -237,111 +172,71 @@ def create_release_package():
     (data_dir / 'logs').mkdir()
     (data_dir / 'gif').mkdir()
     
-    # Beispiel-Konfigurationsdateien kopieren
-    shutil.copy('.env.example', config_dir / '.env.example')
+    # Nur notwendige Dateien kopieren
+    if Path('.env.example').exists():
+        shutil.copy('.env.example', config_dir / '.env.example')
     shutil.copy('README.md', release_dir / 'README.md')
     shutil.copy('LICENSE', release_dir / 'LICENSE')
     
-    # Start-Skripts erstellen
-    create_start_scripts(release_dir)
+    # Einfaches Start-Skript erstellen
+    create_simple_start_script(release_dir)
     
-    print(f"📦 Release-Paket erstellt in: {release_dir}")
+    print(f"[PACKAGE] Minimales Release-Paket erstellt in: {release_dir}")
     return release_dir
 
-def create_start_scripts(release_dir):
-    """Erstellt Start-Skripts für die EXE-Dateien"""
+def create_simple_start_script(release_dir):
+    """Erstellt ein einfaches Start-Skript"""
     
-    start_main_script = '''@echo off
-title Detektiv Pikachu - Haupt-Bot
+    start_script = '''@echo off
+title Detektiv Pikachu - Discord Bot
 echo ===================================
-echo Detektiv Pikachu - Haupt-Bot
+echo     Detektiv Pikachu Discord Bot
 echo ===================================
 echo.
 
 REM Prüfe, ob .env-Datei existiert
 if not exist "config\\.env" (
-    echo FEHLER: .env-Datei nicht gefunden!
-    echo Bitte kopiere config\\.env.example nach config\\.env
-    echo und fülle deine Bot-Tokens ein.
+    echo WARNUNG: .env-Datei nicht gefunden!
+    echo.
+    echo Bitte folge diesen Schritten:
+    echo 1. Kopiere config\\.env.example nach config\\.env
+    echo 2. Öffne config\\.env mit einem Texteditor
+    echo 3. Fülle deine Discord Bot-Tokens ein
+    echo 4. Starte dieses Skript erneut
+    echo.
+    echo Möchtest du config\\.env.example jetzt öffnen? (J/N)
+    set /p choice=
+    if /i "%choice%"=="j" (
+        start notepad config\\.env.example
+    )
     echo.
     pause
     exit /b 1
 )
 
-echo Starte Haupt-Bot...
-MainBot\\DetektivPikachu-MainBot.exe
+echo Starte Detektiv Pikachu Bot-System...
+echo (Haupt-Bot + Helper-Bot werden beide gestartet)
 echo.
-echo Bot wurde beendet.
+DetektivPikachu.exe
+echo.
+echo Bot-System wurde beendet.
 pause
 '''
 
-    start_helper_script = '''@echo off
-title Detektiv Pikachu - Helper-Bot
-echo ===================================
-echo Detektiv Pikachu - Helper-Bot
-echo ===================================
-echo.
-
-REM Prüfe, ob .env-Datei existiert
-if not exist "config\\.env" (
-    echo FEHLER: .env-Datei nicht gefunden!
-    echo Bitte kopiere config\\.env.example nach config\\.env
-    echo und fülle deine Bot-Tokens ein.
-    echo.
-    pause
-    exit /b 1
-)
-
-echo Starte Helper-Bot...
-HelperBot\\DetektivPikachu-HelperBot.exe
-echo.
-echo Bot wurde beendet.
-pause
-'''
-
-    start_both_script = '''@echo off
-title Detektiv Pikachu - Bot Starter
-echo ===================================
-echo Detektiv Pikachu - Beide Bots starten
-echo ===================================
-echo.
-
-REM Prüfe, ob .env-Datei existiert
-if not exist "config\\.env" (
-    echo FEHLER: .env-Datei nicht gefunden!
-    echo Bitte kopiere config\\.env.example nach config\\.env
-    echo und fülle deine Bot-Tokens ein.
-    echo.
-    pause
-    exit /b 1
-)
-
-echo Starte beide Bots...
-start "Detektiv Pikachu - Haupt-Bot" cmd /c "MainBot\\DetektivPikachu-MainBot.exe"
-start "Detektiv Pikachu - Helper-Bot" cmd /c "HelperBot\\DetektivPikachu-HelperBot.exe"
-
-echo.
-echo Beide Bots wurden gestartet.
-echo Du kannst dieses Fenster jetzt schließen.
-echo.
-pause
-'''
-
-    with open(release_dir / 'start_main_bot.bat', 'w', encoding='utf-8') as f:
-        f.write(start_main_script)
+    with open(release_dir / 'Detektiv_Pikachu_starten.bat', 'w', encoding='utf-8') as f:
+        f.write(start_script)
     
-    with open(release_dir / 'start_helper_bot.bat', 'w', encoding='utf-8') as f:
-        f.write(start_helper_script)
-    
-    with open(release_dir / 'start_both_bots.bat', 'w', encoding='utf-8') as f:
-        f.write(start_both_script)
-    
-    print("✓ Start-Skripts erstellt")
+    print("[SCRIPT] Einfaches Start-Skript erstellt")
 
 def main():
     """Hauptfunktion für den Build-Prozess"""
     
-    print("🔨 Detektiv Pikachu EXE Build Tool")
+    # Sicherstelle UTF-8 Ausgabe für Windows
+    if sys.platform == 'win32':
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    
+    print("[BUILD] Detektiv Pikachu EXE Build Tool")
     print("=" * 40)
     
     # 1. Bereinigung
@@ -352,18 +247,18 @@ def main():
     
     # 3. EXE-Dateien bauen
     if not build_executables():
-        print("❌ Build fehlgeschlagen!")
+        print("[ERROR] Build fehlgeschlagen!")
         return 1
     
     # 4. Release-Paket erstellen
     release_dir = create_release_package()
     
-    print("\n🎉 Build erfolgreich abgeschlossen!")
-    print(f"📁 Release-Paket: {release_dir}")
-    print("\n📋 Nächste Schritte:")
+    print("\n[SUCCESS] Build erfolgreich abgeschlossen!")
+    print(f"[INFO] Release-Paket: {release_dir}")
+    print("\n[NEXT] Naechste Schritte:")
     print("1. Kopiere config/.env.example nach config/.env")
-    print("2. Fülle deine Bot-Tokens in config/.env ein")
-    print("3. Starte die Bots mit start_both_bots.bat")
+    print("2. Fuelle deine Bot-Tokens in config/.env ein")
+    print("3. Starte mit Detektiv_Pikachu_starten.bat (empfohlen)")
     
     return 0
 

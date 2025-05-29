@@ -31,23 +31,32 @@ jobs:
       run: |
         Compress-Archive -Path release\* -DestinationPath DetektivPikachu-Windows-${{ github.ref_name }}.zip
         
-    - name: 📊 Get Release Info
+    - name: 📊 Show Release Contents
       run: |
+        Write-Host "=== Release Verzeichnis ===" -ForegroundColor Green
         Get-ChildItem release\ -Recurse | Select-Object Name, Length | Format-Table
+        Write-Host "=== ZIP-Datei ===" -ForegroundColor Green
+        Get-ChildItem DetektivPikachu-Windows-${{ github.ref_name }}.zip | Select-Object Name, Length | Format-Table
         
-    - name: 🔼 Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: 🔼 Upload to Release
+      uses: softprops/action-gh-release@v1
+      if: github.event_name == 'release'
       with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./DetektivPikachu-Windows-${{ github.ref_name }}.zip
-        asset_name: DetektivPikachu-Windows-${{ github.ref_name }}.zip
-        asset_content_type: application/zip
+        files: DetektivPikachu-Windows-${{ github.ref_name }}.zip
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: 📤 Upload Build Artifact (for manual runs)
+      uses: actions/upload-artifact@v4
+      if: github.event_name == 'workflow_dispatch'
+      with:
+        name: DetektivPikachu-Windows-Build
+        path: DetektivPikachu-Windows-${{ github.ref_name }}.zip
+        retention-days: 30
 
-  build-info:
+  update-release-notes:
     runs-on: ubuntu-latest
     needs: build-windows
+    if: github.event_name == 'release'
     
     steps:
     - name: 📝 Update Release Notes
@@ -70,33 +79,38 @@ jobs:
           2. **Entpacke** die Datei in einen Ordner deiner Wahl
           3. **Konfiguration**:
              - Kopiere \`config/.env.example\` nach \`config/.env\`
-             - Fülle deine Discord Bot-Tokens in die \`.env\`-Datei ein
+             - Öffne \`config/.env\` mit einem Texteditor
+             - Fülle deine Discord Bot-Tokens ein
           4. **Starten**:
-             - Doppelklick auf \`start_both_bots.bat\` (startet beide Bots)
-             - Oder einzeln: \`start_main_bot.bat\` und \`start_helper_bot.bat\`
+             - Doppelklick auf \`Detektiv_Pikachu_starten.bat\` (empfohlen - startet beide Bots)
+             - Alternative: Starte \`DetektivPikachu.exe\` direkt
           
           ## 📂 Verzeichnisstruktur nach Installation
           
           \`\`\`
           DetektivPikachu/
-          ├── 📁 MainBot/              # Haupt-Bot EXE
-          ├── 📁 HelperBot/            # Helper-Bot EXE  
-          ├── 📁 config/               # Konfiguration (.env hier ablegen)
-          ├── 📁 data/                 # Bot-Daten (JSON, Logs, GIFs)
-          ├── 📄 start_both_bots.bat   # Beide Bots starten
-          ├── 📄 start_main_bot.bat    # Nur Haupt-Bot
-          ├── 📄 start_helper_bot.bat  # Nur Helper-Bot
-          ├── 📄 README.md
-          └── 📄 LICENSE
+          ├── 🚀 DetektivPikachu.exe          # Haupt-EXE (startet beide Bots)
+          ├── 📁 _internal/                   # PyInstaller Dependencies
+          ├── 📁 config/                      # Konfiguration (.env hier ablegen)
+          │   └── .env.example                # Konfigurationsvorlage
+          ├── 📁 data/                        # Bot-Daten (automatisch erstellt)
+          │   ├── json/                       # Status & Verlauf
+          │   ├── logs/                       # Log-Dateien
+          │   └── gif/                        # GIF-Cache
+          ├── 📄 Detektiv_Pikachu_starten.bat # Benutzerfreundliches Start-Skript
+          ├── 📄 README.md                    # Vollständige Dokumentation
+          └── 📄 LICENSE                      # MIT Lizenz
           \`\`\`
           
           ## ✨ Features dieser Version
           
-          - ✅ **Standalone EXE-Dateien** - Kein Python erforderlich
-          - ✅ **Externe Konfiguration** - JSON-Dateien außerhalb der EXE
+          - ✅ **All-in-One EXE** - Eine EXE startet beide Bots gleichzeitig
+          - ✅ **Detektiv Pikachu Icon** - Schönes Icon für die EXE
+          - ✅ **Externe Konfiguration** - Alle Daten außerhalb der EXE
           - ✅ **Einfache Installation** - ZIP entpacken und starten
-          - ✅ **Automatische Verzeichnisse** - Alle benötigten Ordner werden erstellt
-          - ✅ **Start-Skripts** - Einfaches Starten mit BAT-Dateien
+          - ✅ **Benutzerfreundliches Start-Skript** - Mit Hilfe und Fehlererkennung
+          - ✅ **Automatisches Logging** - Mit Rotation und Komprimierung
+          - ✅ **Channel-Lock-System** - Automatische Rollensperrung bei Problemen
           
           ## 🔧 Erweiterte Installation (Python)
           
@@ -107,9 +121,18 @@ jobs:
           cd Detektiv_Pikachu
           pip install -r requirements.txt
           # .env-Datei konfigurieren
-          python main.py  # Haupt-Bot
-          python helper_bot.py  # Helper-Bot
+          python launcher.py  # Beide Bots (empfohlen)
+          # ODER separat:
+          python main.py      # Nur Haupt-Bot
+          python helper_bot.py # Nur Helper-Bot
           \`\`\`
+          
+          ## 🐛 Problembehandlung
+          
+          - **"Config/.env nicht gefunden"**: Kopiere \`config/.env.example\` nach \`config/.env\`
+          - **"Import Error"**: Nutze die EXE-Version oder installiere \`pip install -r requirements.txt\`
+          - **Bot startet nicht**: Überprüfe die Bot-Tokens in der \`.env\`-Datei
+          - **Weitere Hilfe**: [Discord Server](https://discord.gg/pokemonhideout)
           `;
           
           await github.rest.repos.updateRelease({
@@ -117,4 +140,4 @@ jobs:
             repo,
             release_id: context.payload.release.id,
             body: release.data.body + additionalNotes
-          }); 
+          });
