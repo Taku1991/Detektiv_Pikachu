@@ -5,16 +5,6 @@ on:
     types: [published]
   workflow_dispatch: # Erlaubt manuelles Triggern
 
-permissions:
-  contents: write
-  issues: write
-  pull-requests: write
-  actions: write
-  checks: write
-  deployments: write
-  pages: write
-  statuses: write
-
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -49,11 +39,14 @@ jobs:
         Get-ChildItem DetektivPikachu-Windows-${{ github.ref_name }}.zip | Select-Object Name, Length | Format-Table
         
     - name: 🔼 Upload to Release
-      uses: softprops/action-gh-release@v1
+      uses: ncipollo/release-action@v1
       if: github.event_name == 'release'
       with:
-        files: DetektivPikachu-Windows-${{ github.ref_name }}.zip
-        token: ${{ secrets.GITHUB_TOKEN }}
+        artifacts: "DetektivPikachu-Windows-${{ github.ref_name }}.zip"
+        token: ${{ secrets.PAT_TOKEN }}
+        allowUpdates: true
+        omitBodyDuringUpdate: true
+        omitNameDuringUpdate: true
         
     - name: 📤 Upload Build Artifact (for manual runs)
       uses: actions/upload-artifact@v4
@@ -72,7 +65,7 @@ jobs:
     - name: 📝 Update Release Notes
       uses: actions/github-script@v6
       with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+        github-token: ${{ secrets.PAT_TOKEN }}
         script: |
           const { owner, repo } = context.repo;
           const release = await github.rest.repos.getRelease({
