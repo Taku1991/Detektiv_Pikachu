@@ -47,6 +47,7 @@ a = Analysis(
         ('config', 'config'),
         ('core', 'core'),
         ('utils', 'utils'),
+        ('data/gif', 'data/gif'),
         ('bot_status.py', '.'),
         ('main.py', '.'),
         ('helper_bot.py', '.'),
@@ -177,6 +178,14 @@ def create_release_package():
         shutil.copy('.env.example', config_dir / '.env.example')
     shutil.copy('README.md', release_dir / 'README.md')
     shutil.copy('LICENSE', release_dir / 'LICENSE')
+    
+    # GIF-Dateien kopieren
+    gif_source_dir = Path('data/gif')
+    gif_target_dir = data_dir / 'gif'
+    if gif_source_dir.exists():
+        for gif_file in gif_source_dir.glob('*.gif'):
+            shutil.copy(gif_file, gif_target_dir / gif_file.name)
+        print(f"[GIF] {len(list(gif_source_dir.glob('*.gif')))} GIF-Dateien kopiert")
     
     # Einfaches Start-Skript erstellen
     create_simple_start_script(release_dir)
