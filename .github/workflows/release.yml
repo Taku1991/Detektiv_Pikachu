@@ -1,0 +1,120 @@
+name: 🚀 Build and Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: # Erlaubt manuelles Triggern
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: 📥 Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: 📦 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: 🔨 Build Executables
+      run: |
+        python build_exe.py
+        
+    - name: 📁 Create Release Archive
+      run: |
+        Compress-Archive -Path release\* -DestinationPath DetektivPikachu-Windows-${{ github.ref_name }}.zip
+        
+    - name: 📊 Get Release Info
+      run: |
+        Get-ChildItem release\ -Recurse | Select-Object Name, Length | Format-Table
+        
+    - name: 🔼 Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./DetektivPikachu-Windows-${{ github.ref_name }}.zip
+        asset_name: DetektivPikachu-Windows-${{ github.ref_name }}.zip
+        asset_content_type: application/zip
+
+  build-info:
+    runs-on: ubuntu-latest
+    needs: build-windows
+    
+    steps:
+    - name: 📝 Update Release Notes
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const { owner, repo } = context.repo;
+          const release = await github.rest.repos.getRelease({
+            owner,
+            repo,
+            release_id: context.payload.release.id
+          });
+          
+          const additionalNotes = `
+          
+          ## 📦 Installation (Windows EXE)
+          
+          1. **Lade die ZIP-Datei herunter**: \`DetektivPikachu-Windows-${{ github.ref_name }}.zip\`
+          2. **Entpacke** die Datei in einen Ordner deiner Wahl
+          3. **Konfiguration**:
+             - Kopiere \`config/.env.example\` nach \`config/.env\`
+             - Fülle deine Discord Bot-Tokens in die \`.env\`-Datei ein
+          4. **Starten**:
+             - Doppelklick auf \`start_both_bots.bat\` (startet beide Bots)
+             - Oder einzeln: \`start_main_bot.bat\` und \`start_helper_bot.bat\`
+          
+          ## 📂 Verzeichnisstruktur nach Installation
+          
+          \`\`\`
+          DetektivPikachu/
+          ├── 📁 MainBot/              # Haupt-Bot EXE
+          ├── 📁 HelperBot/            # Helper-Bot EXE  
+          ├── 📁 config/               # Konfiguration (.env hier ablegen)
+          ├── 📁 data/                 # Bot-Daten (JSON, Logs, GIFs)
+          ├── 📄 start_both_bots.bat   # Beide Bots starten
+          ├── 📄 start_main_bot.bat    # Nur Haupt-Bot
+          ├── 📄 start_helper_bot.bat  # Nur Helper-Bot
+          ├── 📄 README.md
+          └── 📄 LICENSE
+          \`\`\`
+          
+          ## ✨ Features dieser Version
+          
+          - ✅ **Standalone EXE-Dateien** - Kein Python erforderlich
+          - ✅ **Externe Konfiguration** - JSON-Dateien außerhalb der EXE
+          - ✅ **Einfache Installation** - ZIP entpacken und starten
+          - ✅ **Automatische Verzeichnisse** - Alle benötigten Ordner werden erstellt
+          - ✅ **Start-Skripts** - Einfaches Starten mit BAT-Dateien
+          
+          ## 🔧 Erweiterte Installation (Python)
+          
+          Wenn du lieber mit Python arbeiten möchtest:
+          
+          \`\`\`bash
+          git clone https://github.com/${{ github.repository }}.git
+          cd Detektiv_Pikachu
+          pip install -r requirements.txt
+          # .env-Datei konfigurieren
+          python main.py  # Haupt-Bot
+          python helper_bot.py  # Helper-Bot
+          \`\`\`
+          `;
+          
+          await github.rest.repos.updateRelease({
+            owner,
+            repo,
+            release_id: context.payload.release.id,
+            body: release.data.body + additionalNotes
+          }); 

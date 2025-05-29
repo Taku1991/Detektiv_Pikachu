@@ -1,0 +1,1 @@
+# Leere __init__.py-Datei für das cogs.admin-Modul 

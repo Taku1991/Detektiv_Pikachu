@@ -1,0 +1,90 @@
+# Python-spezifische Dateien
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtuelle Umgebungen
+venv/
+env/
+ENV/
+.env
+.venv
+
+# Sensible Konfigurationsdateien
+.env
+.env.local
+.env.production
+config.json
+*.config.json
+
+# Projektspezifische Daten
+data/json/*.json
+data/logs/
+logs/
+*.log
+*.log.*
+*.log.*.gz
+
+# Token und Status-Dateien
+token_balancer_status.json
+helper_tasks.json
+helper_results.json
+last_known_status.json
+channel_states.json
+excluded_channels.json
+channel_owners.json
+guild_channels.json
+channel_locker.json
+history_channel.json
+message_ids.json
+status_history.json
+
+# Build und Release-Dateien
+dist/
+build/
+release/
+*.spec
+*.exe
+*.zip
+*.tar.gz
+
+# IDE-spezifische Dateien
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+.VSCodeCounter/
+
+# Temporäre Dateien
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Windows-spezifische Dateien
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# macOS-spezifische Dateien
+.DS_Store
+.AppleDouble
+.LSOverride 
