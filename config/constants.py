@@ -1,9 +1,17 @@
 from pathlib import Path
 import os
+import sys
 from dotenv import load_dotenv
 
 # Lade .env-Datei aus dem Hauptverzeichnis (nicht aus config/)
-BASE_DIR = Path(__file__).parent.parent  # Wurzelverzeichnis des Projekts
+# Angepasst für PyInstaller EXEs
+if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    # Läuft als PyInstaller EXE
+    BASE_DIR = Path(sys.executable).parent
+else:
+    # Läuft als normale Python-Datei
+    BASE_DIR = Path(__file__).parent.parent
+
 env_path = BASE_DIR / '.env'
 
 # Versuche .env zu laden, falls sie existiert

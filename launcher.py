@@ -10,6 +10,15 @@ import sys
 import os
 from pathlib import Path
 from datetime import datetime
+from dotenv import load_dotenv
+
+# EXE-kompatible Pfad-Ermittlung
+if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    # Läuft als PyInstaller EXE
+    BASE_DIR = Path(sys.executable).parent
+else:
+    # Läuft als normale Python-Datei  
+    BASE_DIR = Path(__file__).parent
 
 # Importiere die Bot-Module
 try:
@@ -48,7 +57,7 @@ INACTIVITY_THRESHOLD=600
 ACTIVITY_CHECK_THRESHOLD=120
 """
     
-    env_path = Path('.env')
+    env_path = BASE_DIR / '.env'
     with open(env_path, 'w', encoding='utf-8') as f:
         f.write(env_content)
     
@@ -108,9 +117,19 @@ def simple_setup():
     print("📝 Erstelle Konfigurationsdatei...")
     
     try:
-        create_env_file_simple(primary_token, secondary_token, admin_user_id, rate_limit)
+        env_path = create_env_file_simple(primary_token, secondary_token, admin_user_id, rate_limit)
         print("✅ Konfiguration erfolgreich erstellt!")
         print()
+        
+        # Wichtig: .env neu laden und os.environ aktualisieren
+        load_dotenv(env_path)
+        
+        # BotConstants Werte manuell aktualisieren
+        os.environ['PRIMARY_BOT_TOKEN'] = primary_token
+        os.environ['SECONDARY_BOT_TOKEN'] = secondary_token
+        os.environ['ADMIN_USER_ID'] = str(admin_user_id)
+        os.environ['RATE_LIMIT_COOL_DOWN'] = str(rate_limit)
+        
         return True
     except Exception as e:
         print(f"❌ Fehler beim Erstellen der Konfiguration: {e}")
@@ -137,12 +156,17 @@ class BotLauncher:
     def create_bots(self):
         """Erstellt die Bot-Instanzen"""
         try:
-            # Token Balancer erstellen
+            # Token Balancer erstellen - verwende aktuelle Umgebungsvariablen
+            primary_token = os.getenv('PRIMARY_BOT_TOKEN')
+            secondary_token = os.getenv('SECONDARY_BOT_TOKEN')
+            rate_limit = int(os.getenv('RATE_LIMIT_COOL_DOWN', '60'))
+            max_retries = int(os.getenv('MAX_RETRIES', '3'))
+            
             self.token_balancer = BotTokenBalancer(
-                BotConstants.PRIMARY_BOT_TOKEN,
-                BotConstants.SECONDARY_BOT_TOKEN,
-                BotConstants.RATE_LIMIT_COOL_DOWN,
-                BotConstants.MAX_RETRIES
+                primary_token,
+                secondary_token,
+                rate_limit,
+                max_retries
             )
             
             # Haupt-Bot erstellen
@@ -177,7 +201,8 @@ class BotLauncher:
         """Startet den Helper-Bot"""
         try:
             self.helper_logger.info("Starte Helper-Bot...")
-            await self.helper_bot.start(BotConstants.SECONDARY_BOT_TOKEN)
+            secondary_token = os.getenv('SECONDARY_BOT_TOKEN')
+            await self.helper_bot.start(secondary_token)
             
         except Exception as e:
             self.helper_logger.error(f"Helper-Bot Fehler: {e}", exc_info=True)
@@ -213,7 +238,7 @@ def main():
     print()
     
     # Prüfe ob .env existiert
-    env_path = Path('.env')
+    env_path = BASE_DIR / '.env'
     if not env_path.exists():
         print("📄 Keine Konfigurationsdatei gefunden!")
         print()
@@ -231,11 +256,20 @@ def main():
     
     # Lade Konfiguration und prüfe Tokens
     try:
-        # Konfiguration neu laden
-        from config.constants import BotConstants
-        valid, missing = BotConstants.validate_tokens()
+        # Nach Setup: direkte Validierung der Umgebungsvariablen
+        primary_token = os.getenv('PRIMARY_BOT_TOKEN')
+        secondary_token = os.getenv('SECONDARY_BOT_TOKEN') 
+        admin_user_id = os.getenv('ADMIN_USER_ID')
         
-        if not valid:
+        missing = []
+        if not primary_token:
+            missing.append('PRIMARY_BOT_TOKEN')
+        if not secondary_token:
+            missing.append('SECONDARY_BOT_TOKEN')
+        if not admin_user_id or admin_user_id == '0':
+            missing.append('ADMIN_USER_ID')
+        
+        if missing:
             print("❌ Ungültige Konfiguration!")
             print(f"Fehlende Einstellungen: {', '.join(missing)}")
             print()
