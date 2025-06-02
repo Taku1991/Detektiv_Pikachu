@@ -7,8 +7,7 @@ Startet sowohl den Haupt-Bot als auch den Helper-Bot gleichzeitig
 import asyncio
 import logging
 import sys
-import threading
-import time
+import os
 from pathlib import Path
 from datetime import datetime
 
@@ -22,6 +21,100 @@ except ImportError as e:
     print(f"[ERROR] Import-Fehler: {e}")
     print("[ERROR] Stelle sicher, dass alle Abhängigkeiten installiert sind.")
     sys.exit(1)
+
+def create_env_file_simple(primary_token, secondary_token, admin_user_id, rate_limit=60):
+    """Erstellt eine einfache .env Datei mit den Basis-Einstellungen"""
+    env_content = f"""# Detektiv Pikachu Discord Bot - Konfiguration
+# Automatisch erstellt beim ersten Start
+
+# Bot-Tokens (erforderlich)
+PRIMARY_BOT_TOKEN={primary_token}
+SECONDARY_BOT_TOKEN={secondary_token}
+
+# Admin-Einstellungen
+ADMIN_USER_ID={admin_user_id}
+
+# Rate-Limit-Einstellungen
+RATE_LIMIT_COOL_DOWN={rate_limit}
+
+# Weitere Einstellungen (können später angepasst werden)
+COMMAND_PREFIX=!
+LOG_LEVEL=INFO
+MAX_LOG_SIZE_MB=50
+MAX_LOG_DAYS=7
+MAX_RETRIES=3
+RETRY_DELAY=1
+INACTIVITY_THRESHOLD=600
+ACTIVITY_CHECK_THRESHOLD=120
+"""
+    
+    env_path = Path('.env')
+    with open(env_path, 'w', encoding='utf-8') as f:
+        f.write(env_content)
+    
+    print(f"✅ .env Datei erstellt: {env_path.absolute()}")
+    return env_path
+
+def simple_setup():
+    """Einfache Token-Abfrage direkt in der Konsole"""
+    print("🤖 Detektiv Pikachu Bot - Erste Einrichtung")
+    print("=" * 50)
+    print()
+    print("Der Bot benötigt zwei Discord Bot-Tokens und deine Admin-User-ID.")
+    print("Bot-Tokens findest du hier: https://discord.com/developers/applications")
+    print("Deine Discord User-ID findest du, indem du dich selbst rechtsklickst → 'ID kopieren'")
+    print("(Entwicklermodus muss in Discord aktiviert sein)")
+    print()
+    
+    # Token-Eingabe
+    while True:
+        primary_token = input("🔑 Hauptbot-Token: ").strip()
+        if len(primary_token) < 50:
+            print("❌ Token zu kurz! Bitte überprüfe deine Eingabe.")
+            continue
+        break
+    
+    while True:
+        secondary_token = input("🔑 Helper-Bot-Token: ").strip()
+        if len(secondary_token) < 50:
+            print("❌ Token zu kurz! Bitte überprüfe deine Eingabe.")
+            continue
+        if secondary_token == primary_token:
+            print("❌ Helper-Token muss sich vom Hauptbot-Token unterscheiden!")
+            continue
+        break
+    
+    # Admin User ID
+    while True:
+        admin_id_input = input("👤 Deine Discord User-ID (Admin): ").strip()
+        try:
+            admin_user_id = int(admin_id_input)
+            if admin_user_id < 100000000000000000:  # Discord IDs sind mindestens 17-18 Stellen
+                print("❌ Discord User-ID zu kurz! Sollte 17-19 Stellen haben.")
+                continue
+            break
+        except ValueError:
+            print("❌ Ungültige User-ID! Nur Zahlen erlaubt.")
+            continue
+    
+    # Rate-Limit (optional)
+    rate_limit_input = input("⚙️  Rate-Limit Cooldown in Sekunden (Standard: 60): ").strip()
+    try:
+        rate_limit = int(rate_limit_input) if rate_limit_input else 60
+    except ValueError:
+        rate_limit = 60
+    
+    print()
+    print("📝 Erstelle Konfigurationsdatei...")
+    
+    try:
+        create_env_file_simple(primary_token, secondary_token, admin_user_id, rate_limit)
+        print("✅ Konfiguration erfolgreich erstellt!")
+        print()
+        return True
+    except Exception as e:
+        print(f"❌ Fehler beim Erstellen der Konfiguration: {e}")
+        return False
 
 class BotLauncher:
     def __init__(self):
@@ -93,66 +186,82 @@ class BotLauncher:
     async def run_bots(self):
         """Startet beide Bots gleichzeitig"""
         try:
-            print("[LAUNCHER] Starte beide Bots...")
-            
-            # Erstelle Tasks für beide Bots
-            main_task = asyncio.create_task(self.start_main_bot())
-            helper_task = asyncio.create_task(self.start_helper_bot())
-            
-            # Warte auf beide Tasks
-            done, pending = await asyncio.wait(
-                [main_task, helper_task],
-                return_when=asyncio.FIRST_EXCEPTION
-            )
-            
-            # Überprüfe auf Fehler
-            for task in done:
-                if task.exception():
-                    print(f"[ERROR] Bot-Task fehlgeschlagen: {task.exception()}")
-                    
-                    # Stoppe die anderen Tasks
-                    for pending_task in pending:
-                        pending_task.cancel()
-                        try:
-                            await pending_task
-                        except asyncio.CancelledError:
-                            pass
-                    
-                    raise task.exception()
-            
-        except Exception as e:
-            print(f"[ERROR] Bot-Ausführung fehlgeschlagen: {e}")
-            raise
-
-    def run(self):
-        """Hauptfunktion zum Starten der Bots"""
-        try:
-            print("=" * 50)
-            print("[LAUNCHER] Detektiv Pikachu Bot Launcher")
-            print(f"[LAUNCHER] Gestartet um: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            print("=" * 50)
-            
             # Setup
             self.setup_logging()
             self.create_bots()
             
-            # Starte beide Bots
-            asyncio.run(self.run_bots())
+            print("🚀 Starte Dual-Bot-System...")
+            print("   Zum Beenden: Strg+C drücken")
+            print("=" * 40)
+            print()
             
-        except KeyboardInterrupt:
-            print("\n[LAUNCHER] Shutdown durch Benutzer...")
+            # Beide Bots parallel starten
+            await asyncio.gather(
+                self.start_main_bot(),
+                self.start_helper_bot(),
+                return_exceptions=True
+            )
+            
         except Exception as e:
             print(f"[ERROR] Launcher-Fehler: {e}")
-            return 1
-        finally:
-            print("[LAUNCHER] Shutdown abgeschlossen.")
-            
-        return 0
+            raise
 
 def main():
-    """Haupteinstiegspunkt"""
+    """Hauptfunktion"""
+    print("🤖 Detektiv Pikachu Bot Launcher")
+    print("=" * 35)
+    print()
+    
+    # Prüfe ob .env existiert
+    env_path = Path('.env')
+    if not env_path.exists():
+        print("📄 Keine Konfigurationsdatei gefunden!")
+        print()
+        
+        response = input("Möchtest du jetzt die Bot-Tokens eingeben? (J/N): ").lower()
+        if response != 'j':
+            print("❌ Bot kann ohne Tokens nicht gestartet werden.")
+            print("💡 Erstelle eine .env Datei oder starte das Programm erneut.")
+            sys.exit(1)
+        
+        print()
+        if not simple_setup():
+            print("❌ Setup fehlgeschlagen!")
+            sys.exit(1)
+    
+    # Lade Konfiguration und prüfe Tokens
+    try:
+        # Konfiguration neu laden
+        from config.constants import BotConstants
+        valid, missing = BotConstants.validate_tokens()
+        
+        if not valid:
+            print("❌ Ungültige Konfiguration!")
+            print(f"Fehlende Einstellungen: {', '.join(missing)}")
+            print()
+            print("💡 Lösung: Lösche die .env Datei und starte erneut für neue Token-Eingabe")
+            sys.exit(1)
+            
+        print("✅ Konfiguration validiert")
+        
+    except Exception as e:
+        print(f"❌ Konfigurationsfehler: {e}")
+        print("💡 Lösung: Lösche die .env Datei und starte erneut")
+        sys.exit(1)
+    
+    # Bots starten
     launcher = BotLauncher()
-    return launcher.run()
+    
+    try:
+        asyncio.run(launcher.run_bots())
+    except KeyboardInterrupt:
+        print("\n🛑 Bot-System wird beendet...")
+    except Exception as e:
+        print(f"\n❌ Unerwarteter Fehler: {e}")
+        print("🔍 Überprüfe die Log-Dateien für weitere Details")
+        sys.exit(1)
+    finally:
+        print("👋 Bot-System beendet")
 
-if __name__ == '__main__':
-    sys.exit(main()) 
+if __name__ == "__main__":
+    main() 

@@ -75,7 +75,7 @@ release/
 
 # Temporäre Dateien
 tmp/
-temp/
+temp/ 
 *.tmp
 *.bak
 

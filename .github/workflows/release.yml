@@ -80,61 +80,65 @@ jobs:
           
           1. **Lade die ZIP-Datei herunter**: \`DetektivPikachu-Windows-${{ github.ref_name }}.zip\`
           2. **Entpacke** die Datei in einen Ordner deiner Wahl
-          3. **Konfiguration**:
-             - Kopiere \`config/.env.example\` nach \`config/.env\`
-             - Öffne \`config/.env\` mit einem Texteditor
-             - Fülle deine Discord Bot-Tokens ein
-          4. **Starten**:
-             - Doppelklick auf \`Detektiv_Pikachu_starten.bat\` (empfohlen - startet beide Bots)
-             - Alternative: Starte \`DetektivPikachu.exe\` direkt
+          3. **Starten**: Doppelklick auf \`Detektiv_Pikachu_starten.bat\` oder \`DetektivPikachu.exe\`
+          4. **Erste Einrichtung**: Bot fragt automatisch nach den Bot-Tokens
+          5. **Fertig**: Bot startet automatisch nach der Eingabe
           
           ## 📂 Verzeichnisstruktur nach Installation
           
           \`\`\`
           DetektivPikachu/
-          ├── 🚀 DetektivPikachu.exe          # Haupt-EXE (startet beide Bots)
-          ├── 📁 _internal/                   # PyInstaller Dependencies
-          ├── 📁 config/                      # Konfiguration (.env hier ablegen)
-          │   └── .env.example                # Konfigurationsvorlage
-          ├── 📁 data/                        # Bot-Daten (automatisch erstellt)
-          │   ├── json/                       # Status & Verlauf
-          │   ├── logs/                       # Log-Dateien
-          │   └── gif/                        # GIF-Cache
-          ├── 📄 Detektiv_Pikachu_starten.bat # Benutzerfreundliches Start-Skript
-          ├── 📄 README.md                    # Vollständige Dokumentation
-          └── 📄 LICENSE                      # MIT Lizenz
+          ├── 🚀 DetektivPikachu.exe              # Haupt-EXE (All-in-One)
+          ├── 📁 _internal/                       # PyInstaller Dependencies
+          ├── 🎯 Detektiv_Pikachu_starten.bat    # Einfaches Start-Skript
+          ├── 📁 data/                            # Bot-Daten (automatisch erstellt)
+          │   ├── json/                           # Status & Verlauf
+          │   ├── logs/                           # Log-Dateien
+          │   └── gif/                            # GIF-Cache
+          ├── 📄 .env                             # Konfiguration (automatisch erstellt)
+          ├── 📄 README.md                        # Vollständige Dokumentation
+          └── 📄 LICENSE                          # MIT Lizenz
           \`\`\`
           
-          ## ✨ Features dieser Version
+          ## ✨ Neue Features dieser Version
           
-          - ✅ **All-in-One EXE** - Eine EXE startet beide Bots gleichzeitig
-          - ✅ **Detektiv Pikachu Icon** - Schönes Icon für die EXE
-          - ✅ **Externe Konfiguration** - Alle Daten außerhalb der EXE
-          - ✅ **Einfache Installation** - ZIP entpacken und starten
-          - ✅ **Benutzerfreundliches Start-Skript** - Mit Hilfe und Fehlererkennung
-          - ✅ **Automatisches Logging** - Mit Rotation und Komprimierung
+          - ✅ **Ultra-Einfaches Setup** - Nur EXE starten → Tokens eingeben → fertig!
+          - ✅ **Automatische Token-Abfrage** - Keine manuellen Konfigurationsdateien nötig
+          - ✅ **Ein-Klick-Start** - Detektiv_Pikachu_starten.bat macht alles automatisch
+          - ✅ **Intelligente Validierung** - Überprüft Token-Format automatisch
+          - ✅ **Dual-Bot-System** - Haupt-Bot + Helper-Bot mit Token-Balancing
           - ✅ **Channel-Lock-System** - Automatische Rollensperrung bei Problemen
+          - ✅ **Kein Setup-Tool nötig** - Alles direkt in der EXE integriert
           
-          ## 🔧 Erweiterte Installation (Python)
+          ## 🚀 Super-Schnellstart (nur 3 Schritte!)
           
-          Wenn du lieber mit Python arbeiten möchtest:
+          1. **ZIP entpacken**
+          2. **Detektiv_Pikachu_starten.bat** ausführen
+          3. **Bot-Tokens eingeben** (nur beim ersten Mal)
+          
+          **Das war's!** 🎉
+          
+          ## 🔧 Erweiterte Installation (Python-Entwickler)
           
           \`\`\`bash
           git clone https://github.com/${{ github.repository }}.git
           cd Detektiv_Pikachu
           pip install -r requirements.txt
-          # .env-Datei konfigurieren
-          python launcher.py  # Beide Bots (empfohlen)
-          # ODER separat:
-          python main.py      # Nur Haupt-Bot
-          python helper_bot.py # Nur Helper-Bot
+          python launcher.py          # Startet beide Bots (fragt nach Tokens falls nötig)
           \`\`\`
+          
+          ## 🔑 Bot-Tokens erstellen
+          
+          1. Gehe zu [Discord Developer Portal](https://discord.com/developers/applications)
+          2. Erstelle zwei neue Applications
+          3. Gehe zu "Bot" → "Reset Token" für jeden Bot
+          4. Kopiere die Tokens und gib sie beim ersten Start ein
           
           ## 🐛 Problembehandlung
           
-          - **"Config/.env nicht gefunden"**: Kopiere \`config/.env.example\` nach \`config/.env\`
+          - **Token-Probleme**: Lösche die \`.env\` Datei und starte erneut für neue Token-Eingabe
           - **"Import Error"**: Nutze die EXE-Version oder installiere \`pip install -r requirements.txt\`
-          - **Bot startet nicht**: Überprüfe die Bot-Tokens in der \`.env\`-Datei
+          - **Bot startet nicht**: Überprüfe Internetverbindung und Token-Gültigkeit
           - **Weitere Hilfe**: [Discord Server](https://discord.gg/pokemonhideout)
           `;
           

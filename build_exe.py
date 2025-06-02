@@ -51,7 +51,6 @@ a = Analysis(
         ('bot_status.py', '.'),
         ('main.py', '.'),
         ('helper_bot.py', '.'),
-        ('.env.example', '.'),
         ('README.md', '.'),
         ('LICENSE', '.'),
     ],
@@ -163,19 +162,14 @@ def create_release_package():
         if internal_dir.exists():
             shutil.copytree(internal_dir, release_dir / '_internal')
     
-    # Konfigurationsverzeichnis erstellen
-    config_dir = release_dir / 'config'
+    # Datenverzeichnis erstellen
     data_dir = release_dir / 'data'
-    
-    config_dir.mkdir()
     data_dir.mkdir()
     (data_dir / 'json').mkdir()
     (data_dir / 'logs').mkdir()
     (data_dir / 'gif').mkdir()
     
-    # Nur notwendige Dateien kopieren
-    if Path('.env.example').exists():
-        shutil.copy('.env.example', config_dir / '.env.example')
+    # Kopiere wichtige Dateien
     shutil.copy('README.md', release_dir / 'README.md')
     shutil.copy('LICENSE', release_dir / 'LICENSE')
     
@@ -187,55 +181,61 @@ def create_release_package():
             shutil.copy(gif_file, gif_target_dir / gif_file.name)
         print(f"[GIF] {len(list(gif_source_dir.glob('*.gif')))} GIF-Dateien kopiert")
     
-    # Einfaches Start-Skript erstellen
-    create_simple_start_script(release_dir)
+    # Erstelle Start-Skript
+    create_intelligent_start_scripts(release_dir)
     
-    print(f"[PACKAGE] Minimales Release-Paket erstellt in: {release_dir}")
+    print(f"[PACKAGE] Release-Paket erstellt in: {release_dir}")
     return release_dir
 
-def create_simple_start_script(release_dir):
-    """Erstellt ein einfaches Start-Skript"""
+def create_intelligent_start_scripts(release_dir):
+    """Erstellt ein einfaches Start-Skript für die EXE-Version"""
     
+    # Einfaches Startskript
     start_script = '''@echo off
 title Detektiv Pikachu - Discord Bot
-echo ===================================
-echo     Detektiv Pikachu Discord Bot
-echo ===================================
+echo ========================================
+echo      🤖 Detektiv Pikachu Discord Bot
+echo ========================================
 echo.
 
-REM Prüfe, ob .env-Datei existiert
-if not exist "config\\.env" (
-    echo WARNUNG: .env-Datei nicht gefunden!
+echo Starte Detektiv Pikachu Bot...
+echo (Bei der ersten Nutzung werden Bot-Tokens abgefragt)
+echo.
+echo Zum Beenden: Strg+C drücken
+echo.
+
+REM Starte die EXE
+DetektivPikachu.exe
+if errorlevel 1 (
     echo.
-    echo Bitte folge diesen Schritten:
-    echo 1. Kopiere config\\.env.example nach config\\.env
-    echo 2. Öffne config\\.env mit einem Texteditor
-    echo 3. Fülle deine Discord Bot-Tokens ein
-    echo 4. Starte dieses Skript erneut
+    echo ❌ Bot konnte nicht gestartet werden!
     echo.
-    echo Möchtest du config\\.env.example jetzt öffnen? (J/N)
-    set /p choice=
-    if /i "%choice%"=="j" (
-        start notepad config\\.env.example
-    )
+    echo 🔍 Mögliche Probleme:
+    echo   • Ungültige Bot-Tokens
+    echo   • Keine Internetverbindung
+    echo   • Discord API-Probleme
+    echo.
+    echo 💡 Lösungsvorschläge:
+    echo   • Lösche .env Datei für neue Token-Eingabe
+    echo   • Teste deine Internetverbindung
+    echo   • Überprüfe die Log-Dateien im data/logs/ Ordner
     echo.
     pause
     exit /b 1
 )
 
-echo Starte Detektiv Pikachu Bot-System...
-echo (Haupt-Bot + Helper-Bot werden beide gestartet)
 echo.
-DetektivPikachu.exe
+echo 👋 Bot wurde beendet.
 echo.
-echo Bot-System wurde beendet.
 pause
 '''
 
+    # Schreibe Start-Skript
     with open(release_dir / 'Detektiv_Pikachu_starten.bat', 'w', encoding='utf-8') as f:
         f.write(start_script)
     
-    print("[SCRIPT] Einfaches Start-Skript erstellt")
+    print("[SCRIPT] Einfaches Start-Skript erstellt:")
+    print("  - Detektiv_Pikachu_starten.bat (Startet EXE mit Token-Abfrage)")
 
 def main():
     """Hauptfunktion für den Build-Prozess"""
