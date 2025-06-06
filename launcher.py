@@ -20,11 +20,10 @@ else:
     # Läuft als normale Python-Datei  
     BASE_DIR = Path(__file__).parent
 
-# Importiere die Bot-Module
+# Importiere die Bot-Module (BotConstants später laden)
 try:
     from main import StatusBot, BotTokenBalancer, setup_logging as setup_main_logging
     from helper_bot import HelperBot, setup_logging as setup_helper_logging
-    from config.constants import BotConstants
     from cogs import setup_cogs
 except ImportError as e:
     print(f"[ERROR] Import-Fehler: {e}")
@@ -256,6 +255,10 @@ def main():
     
     # Lade Konfiguration und prüfe Tokens
     try:
+        # Lade .env explizit nach dem Setup
+        if env_path.exists():
+            load_dotenv(env_path)
+        
         # Nach Setup: direkte Validierung der Umgebungsvariablen
         primary_token = os.getenv('PRIMARY_BOT_TOKEN')
         secondary_token = os.getenv('SECONDARY_BOT_TOKEN') 

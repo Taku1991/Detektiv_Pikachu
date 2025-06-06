@@ -14,12 +14,10 @@ else:
 
 env_path = BASE_DIR / '.env'
 
-# Versuche .env zu laden, falls sie existiert
+# Versuche .env zu laden, falls sie existiert (graceful handling)
 if env_path.exists():
     load_dotenv(env_path)
-else:
-    print(f"⚠️  WARNUNG: .env Datei nicht gefunden: {env_path}")
-    print("💡 Erstelle eine .env Datei im Hauptverzeichnis mit deinen Bot-Tokens")
+# Keine Warnung hier ausgeben - das macht der Launcher
 
 class BotConstants:
     # Verzeichnisse und Pfade
