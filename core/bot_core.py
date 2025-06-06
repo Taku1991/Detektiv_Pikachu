@@ -160,8 +160,8 @@ class StatusBot(commands.Bot):
             
             try:
                 logger.info("Waiting for bot to be fully ready...")
-                # Timeout nach 30 Sekunden hinzufügen
-                ready_timeout = 30
+                # Timeout nach 60 Sekunden hinzufügen (erhöht für langsamere Verbindungen)
+                ready_timeout = 60
                 await asyncio.wait_for(self.wait_until_ready(), timeout=ready_timeout)
                 logger.info("Bot is ready!")
                 
