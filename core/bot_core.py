@@ -38,18 +38,17 @@ class StatusBot(commands.Bot):
         
         super().__init__(command_prefix="!", intents=intents)
         
-        logger.info("Initializing DataManager")
+        # Basis-Komponenten sofort initialisieren
+        logger.info("Initializing essential components")
         self.data_manager = DataManager(BotConstants.DATA_DIR)
-        logger.info("Initializing ChannelConfig")
         self.config = ChannelConfig()
-        logger.info("Initializing StatusPatterns")
         self.patterns = StatusPatterns()
         
-        # Initialize managers
-        self.status_manager = StatusManager(self)
-        self.message_manager = MessageManager(self)
-        self.channel_manager = ChannelManager(self)
-        self.channel_locker = ChannelLocker(self)
+        # Manager werden lazy initialisiert
+        self._status_manager = None
+        self._message_manager = None
+        self._channel_manager = None
+        self._channel_locker = None
         
         # State tracking (basics only)
         self.guild_channels: Dict[str, Dict[str, str]] = {}
@@ -87,10 +86,37 @@ class StatusBot(commands.Bot):
             except discord.errors.NotFound:
                 pass
         
-        # Commands werden jetzt über Cogs geladen
-        
-        self.load_data()
+        # Initiale Datenladung in setup_hook() verschoben
         logger.info("StatusBot initialization complete")
+    
+    # Lazy Properties für Manager
+    @property
+    def status_manager(self):
+        if self._status_manager is None:
+            logger.info("Initializing StatusManager")
+            self._status_manager = StatusManager(self)
+        return self._status_manager
+    
+    @property  
+    def message_manager(self):
+        if self._message_manager is None:
+            logger.info("Initializing MessageManager")
+            self._message_manager = MessageManager(self)
+        return self._message_manager
+    
+    @property
+    def channel_manager(self):
+        if self._channel_manager is None:
+            logger.info("Initializing ChannelManager")
+            self._channel_manager = ChannelManager(self)
+        return self._channel_manager
+    
+    @property
+    def channel_locker(self):
+        if self._channel_locker is None:
+            logger.info("Initializing ChannelLocker")
+            self._channel_locker = ChannelLocker(self)
+        return self._channel_locker
 
     def load_data(self):
             """Load initial data"""
@@ -103,10 +129,13 @@ class StatusBot(commands.Bot):
             self.history_channel_id = history_data.get("history_channel")
             logger.info(f"History Channel ID geladen: {self.history_channel_id}")
             
-            # Lade Manager-Daten
-            self.status_manager.load_data()
-            self.channel_manager.load_data()
-            self.channel_locker.load_data()
+            # Lade Manager-Daten nur wenn Manager bereits initialisiert
+            if self._status_manager is not None:
+                self.status_manager.load_data()
+            if self._channel_manager is not None:
+                self.channel_manager.load_data()
+            if self._channel_locker is not None:
+                self.channel_locker.load_data()
 
     async def on_connect(self):
         """Called when the bot connects to Discord"""
@@ -153,35 +182,55 @@ class StatusBot(commands.Bot):
             logger.error(f"Error during reconnect attempt: {e}")
 
     async def setup_hook(self):
-            """Initialize bot data and start tasks"""
-            logger.info("Setup hook started...")
-            self.load_data()
+        """Initialize bot data and start tasks"""
+        logger.info("Setup hook started...")
+        
+        # Lade Cogs zuerst (vor anderen Tasks)
+        try:
+            logger.info("Loading cogs...")
+            from cogs import setup_cogs
+            await setup_cogs(self)
+            logger.info("All cogs loaded successfully")
+        except Exception as e:
+            logger.error(f"Error loading cogs: {e}", exc_info=True)
+            return
+        
+        # Dann lade Daten und starte Tasks
+        self.load_data()
+        
+        # Starte Tasks nur wenn Manager bereits initialisiert
+        if self._status_manager is not None:
             self.status_manager.start_tasks()
+        
+        try:
+            logger.info("Waiting for bot to be fully ready...")
+            # Warte maximal 30 Sekunden
+            await asyncio.wait_for(self.wait_until_ready(), timeout=30.0)
+            logger.info("Bot is ready!")
             
-            try:
-                logger.info("Waiting for bot to be fully ready...")
-                # Warte ohne Timeout - Bot soll so lange Zeit haben wie nötig
-                await self.wait_until_ready()
-                logger.info("Bot is ready!")
-                
-            except Exception as e:
-                logger.error(f"Unexpected error while waiting for bot to be ready: {e}")
-                return
+        except asyncio.TimeoutError:
+            logger.warning("Bot ready timeout after 30 seconds - continuing anyway")
+        except Exception as e:
+            logger.error(f"Unexpected error while waiting for bot to be ready: {e}")
+            return
+        
+        # Synchronisiere die Slash-Commands
+        try:
+            logger.info("Starting command sync...")
+            commands = [cmd.name for cmd in self.tree.get_commands()]
+            logger.info(f"Found commands to sync: {commands}")
             
-            # Synchronisiere die Slash-Commands
-            try:
-                logger.info("Starting command sync...")
-                commands = [cmd.name for cmd in self.tree.get_commands()]
-                logger.info(f"Found commands to sync: {commands}")
-                
-                synced = await self.tree.sync()
-                synced_names = [cmd.name for cmd in synced]
-                logger.info(f"Successfully synced {len(synced)} command(s): {synced_names}")
-                
-            except Exception as e:
-                logger.error(f"Error syncing application commands: {e}", exc_info=True)
-                
-            logger.info("Setup hook completed")
+            # Sync mit Timeout
+            synced = await asyncio.wait_for(self.tree.sync(), timeout=15.0)
+            synced_names = [cmd.name for cmd in synced]
+            logger.info(f"Successfully synced {len(synced)} command(s): {synced_names}")
+            
+        except asyncio.TimeoutError:
+            logger.warning("Command sync timeout after 15 seconds")
+        except Exception as e:
+            logger.error(f"Error syncing application commands: {e}", exc_info=True)
+            
+        logger.info("Setup hook completed")
 
     async def on_ready(self):
         """Called when the bot has successfully connected to Discord"""

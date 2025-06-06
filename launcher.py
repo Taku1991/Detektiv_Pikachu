@@ -184,8 +184,7 @@ class BotLauncher:
     async def start_main_bot(self):
         """Startet den Haupt-Bot"""
         try:
-            # Lade Cogs für den Haupt-Bot
-            await setup_cogs(self.main_bot)
+            # Cogs werden automatisch in setup_hook() geladen
             self.main_logger.info("Starte Haupt-Bot...")
             
             # Haupt-Bot mit Token-Balancing starten

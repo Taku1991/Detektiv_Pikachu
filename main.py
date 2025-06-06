@@ -153,6 +153,10 @@ if __name__ == "__main__":
     # Setup Logging
     logger = setup_logging()
     
+    # Performance-Tracking
+    start_time = time.time()
+    logger.info("=== Bot-Start initialisiert ===")
+    
     # Initialisiere Token Balancer
     token_balancer = BotTokenBalancer(
         BotConstants.PRIMARY_BOT_TOKEN,
@@ -166,19 +170,21 @@ if __name__ == "__main__":
     while True:  # Endlosschleife für automatische Wiederverbindungsversuche
         try:
             # Erstelle Bot-Instanz
+            init_start = time.time()
             logger.debug("Creating StatusBot instance")  
             bot = StatusBot()
             
             # Füge den Token-Balancer zum Bot hinzu, damit er über Befehle zugänglich ist
             bot.token_balancer = token_balancer
             
-            # Lade alle Cogs
-            asyncio.run(setup_cogs(bot))
-            
-            logger.info("Bot instance created successfully")
+            # Cogs werden jetzt in setup_hook() geladen - nicht hier!
+            init_time = time.time() - init_start
+            logger.info(f"Bot instance created successfully (took {init_time:.2f}s)")
             
             # Starte den Bot mit dem aktuellen Token
             logger.info(f"Bot initialized, attempting to run ({token_balancer.get_status_text()})")
+            total_init_time = time.time() - start_time
+            logger.info(f"=== Gesamte Initialisierung: {total_init_time:.2f}s ===")
             
             current_token = token_balancer.get_current_token()
             bot.run(current_token, reconnect=True)
