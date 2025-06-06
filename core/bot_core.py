@@ -160,13 +160,12 @@ class StatusBot(commands.Bot):
             
             try:
                 logger.info("Waiting for bot to be fully ready...")
-                # Timeout nach 60 Sekunden hinzufügen (erhöht für langsamere Verbindungen)
-                ready_timeout = 60
-                await asyncio.wait_for(self.wait_until_ready(), timeout=ready_timeout)
+                # Warte ohne Timeout - Bot soll so lange Zeit haben wie nötig
+                await self.wait_until_ready()
                 logger.info("Bot is ready!")
                 
-            except asyncio.TimeoutError:
-                logger.error(f"Bot failed to become ready within {ready_timeout} seconds")
+            except Exception as e:
+                logger.error(f"Unexpected error while waiting for bot to be ready: {e}")
                 return
             
             # Synchronisiere die Slash-Commands
