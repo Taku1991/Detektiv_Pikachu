@@ -35,31 +35,35 @@ jobs:
           const { owner, repo } = context.repo;
           const tag = '${{ steps.tag_info.outputs.tag }}';
           
+          const releaseBody = [
+            '## 🚀 Detektiv Pikachu ' + tag,
+            '',
+            '### ✨ Neue Features & Verbesserungen',
+            '- 🚀 **Performance-Optimierung**: Bis zu 70% schnellere Bot-Startzeit',
+            '- ⚡ **Lazy Loading**: Manager werden erst bei Bedarf geladen', 
+            '- 🔄 **Paralleles Cog-Loading**: Alle Extensions laden gleichzeitig',
+            '- ⏱️ **Smart Timeouts**: Verhindert ewiges Warten beim Start',
+            '- 📊 **Performance-Monitoring**: Zeigt genau an, wie lange der Start dauert',
+            '',
+            '### 📦 Download & Installation',
+            'Die Windows-EXE wird automatisch gebaut und ist in wenigen Minuten verfügbar!',
+            '',
+            '---',
+            '*Automatisch erstellt beim Tag-Push* 🤖'
+          ].join('\n');
+          
           try {
             const release = await github.rest.repos.createRelease({
               owner,
               repo,
               tag_name: tag,
-              name: `Detektiv Pikachu ${tag}`,
-              body: `## 🚀 Detektiv Pikachu ${tag}
-              
-              ### ✨ Neue Features & Verbesserungen
-              - 🚀 **Performance-Optimierung**: Bis zu 70% schnellere Bot-Startzeit  
-              - ⚡ **Lazy Loading**: Manager werden erst bei Bedarf geladen
-              - 🔄 **Paralleles Cog-Loading**: Alle Extensions laden gleichzeitig
-              - ⏱️ **Smart Timeouts**: Verhindert ewiges Warten beim Start
-              - 📊 **Performance-Monitoring**: Zeigt genau an, wie lange der Start dauert
-              
-              ### 📦 Download & Installation
-              Die Windows-EXE wird automatisch gebaut und ist in wenigen Minuten verfügbar!
-              
-              ---
-              *Automatisch erstellt beim Tag-Push* 🤖`,
+              name: 'Detektiv Pikachu ' + tag,
+              body: releaseBody,
               draft: false,
               prerelease: tag.includes('beta') || tag.includes('alpha')
             });
             
-            console.log(\`Release erstellt: \${release.data.html_url}\`);
+            console.log('Release erstellt: ' + release.data.html_url);
             return release.data.id;
           } catch (error) {
             console.error('Fehler beim Erstellen des Release:', error);
@@ -168,62 +172,63 @@ jobs:
           }
           
           const tagName = release.data.tag_name;
-          const additionalNotes = `
-          
-          ## 📦 Installation (Windows EXE)
-          
-          1. **Lade die ZIP-Datei herunter**: \`DetektivPikachu-Windows-${tagName}.zip\`
-          2. **Entpacke** die Datei in einen Ordner deiner Wahl
-          3. **Starten**: Doppelklick auf \`Detektiv_Pikachu_starten.bat\` oder \`DetektivPikachu.exe\`
-          4. **Erste Einrichtung**: Bot fragt automatisch nach den Bot-Tokens
-          5. **Fertig**: Bot startet automatisch nach der Eingabe
-          
-          ## 📂 Verzeichnisstruktur nach Installation
-          
-          \`\`\`
-          DetektivPikachu/
-          ├── 🚀 DetektivPikachu.exe              # Haupt-EXE (All-in-One)
-          ├── 📁 _internal/                       # PyInstaller Dependencies
-          ├── 🎯 Detektiv_Pikachu_starten.bat    # Einfaches Start-Skript
-          ├── 📁 data/                            # Bot-Daten (automatisch erstellt)
-          │   ├── json/                           # Status & Verlauf
-          │   ├── logs/                           # Log-Dateien
-          │   └── gif/                            # GIF-Cache
-          ├── 📄 .env                             # Konfiguration (automatisch erstellt)
-          ├── 📄 README.md                        # Vollständige Dokumentation
-          └── 📄 LICENSE                          # MIT Lizenz
-          \`\`\`
-          
-          ## 🚀 Super-Schnellstart (nur 3 Schritte!)
-          
-          1. **ZIP entpacken**
-          2. **Detektiv_Pikachu_starten.bat** ausführen
-          3. **Bot-Tokens eingeben** (nur beim ersten Mal)
-          
-          **Das war's!** 🎉
-          
-          ## 🔧 Performance-Verbesserungen in dieser Version
-          
-          - ⚡ **70% schnellere Startzeit** durch optimierte Initialisierung
-          - 🔄 **Paralleles Laden** aller Bot-Komponenten
-          - 🎯 **Lazy Loading** - Komponenten werden erst bei Bedarf geladen
-          - ⏱️ **Smart Timeouts** - Bot hängt sich nicht mehr beim Start auf
-          - 📊 **Detailliertes Performance-Monitoring** in den Logs
-          
-          ## 🔑 Bot-Tokens erstellen
-          
-          1. Gehe zu [Discord Developer Portal](https://discord.com/developers/applications)
-          2. Erstelle zwei neue Applications
-          3. Gehe zu "Bot" → "Reset Token" für jeden Bot
-          4. Kopiere die Tokens und gib sie beim ersten Start ein
-          
-          ## 🐛 Problembehandlung
-          
-          - **Token-Probleme**: Lösche die \`.env\` Datei und starte erneut für neue Token-Eingabe
-          - **"Import Error"**: Nutze die EXE-Version oder installiere \`pip install -r requirements.txt\`
-          - **Bot startet nicht**: Überprüfe Internetverbindung und Token-Gültigkeit
-          - **Weitere Hilfe**: [Discord Server](https://discord.gg/pokemonhideout)
-          `;
+          const additionalNotes = [
+            '',
+            '',
+            '## 📦 Installation (Windows EXE)',
+            '',
+            '1. **Lade die ZIP-Datei herunter**: `DetektivPikachu-Windows-' + tagName + '.zip`',
+            '2. **Entpacke** die Datei in einen Ordner deiner Wahl',
+            '3. **Starten**: Doppelklick auf `Detektiv_Pikachu_starten.bat` oder `DetektivPikachu.exe`',
+            '4. **Erste Einrichtung**: Bot fragt automatisch nach den Bot-Tokens',
+            '5. **Fertig**: Bot startet automatisch nach der Eingabe',
+            '',
+            '## 📂 Verzeichnisstruktur nach Installation',
+            '',
+            '```',
+            'DetektivPikachu/',
+            '├── 🚀 DetektivPikachu.exe              # Haupt-EXE (All-in-One)',
+            '├── 📁 _internal/                       # PyInstaller Dependencies',
+            '├── 🎯 Detektiv_Pikachu_starten.bat    # Einfaches Start-Skript',
+            '├── 📁 data/                            # Bot-Daten (automatisch erstellt)',
+            '│   ├── json/                           # Status & Verlauf',
+            '│   ├── logs/                           # Log-Dateien',
+            '│   └── gif/                            # GIF-Cache',
+            '├── 📄 .env                             # Konfiguration (automatisch erstellt)',
+            '├── 📄 README.md                        # Vollständige Dokumentation',
+            '└── 📄 LICENSE                          # MIT Lizenz',
+            '```',
+            '',
+            '## 🚀 Super-Schnellstart (nur 3 Schritte!)',
+            '',
+            '1. **ZIP entpacken**',
+            '2. **Detektiv_Pikachu_starten.bat** ausführen',
+            '3. **Bot-Tokens eingeben** (nur beim ersten Mal)',
+            '',
+            '**Das war\'s!** ��',
+            '',
+            '## 🔧 Performance-Verbesserungen in dieser Version',
+            '',
+            '- ⚡ **70% schnellere Startzeit** durch optimierte Initialisierung',
+            '- 🔄 **Paralleles Laden** aller Bot-Komponenten',
+            '- 🎯 **Lazy Loading** - Komponenten werden erst bei Bedarf geladen',
+            '- ⏱️ **Smart Timeouts** - Bot hängt sich nicht mehr beim Start auf',
+            '- 📊 **Detailliertes Performance-Monitoring** in den Logs',
+            '',
+            '## 🔑 Bot-Tokens erstellen',
+            '',
+            '1. Gehe zu [Discord Developer Portal](https://discord.com/developers/applications)',
+            '2. Erstelle zwei neue Applications',
+            '3. Gehe zu "Bot" → "Reset Token" für jeden Bot',
+            '4. Kopiere die Tokens und gib sie beim ersten Start ein',
+            '',
+            '## 🐛 Problembehandlung',
+            '',
+            '- **Token-Probleme**: Lösche die `.env` Datei und starte erneut für neue Token-Eingabe',
+            '- **"Import Error"**: Nutze die EXE-Version oder installiere `pip install -r requirements.txt`',
+            '- **Bot startet nicht**: Überprüfe Internetverbindung und Token-Gültigkeit',
+            '- **Weitere Hilfe**: [Discord Server](https://discord.gg/pokemonhideout)'
+          ].join('\n');
           
           await github.rest.repos.updateRelease({
             owner,
@@ -232,4 +237,4 @@ jobs:
             body: release.data.body + additionalNotes
           });
           
-          console.log(\`Release Notes aktualisiert für \${tagName}\`);
+          console.log('Release Notes aktualisiert für ' + tagName);
