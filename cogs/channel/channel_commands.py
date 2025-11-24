@@ -32,48 +32,170 @@ class ChannelCommands(commands.Cog):
         try:
             guild_id = str(interaction.guild_id)
             
-            existing_update = self.bot.channel_manager.get_update_channel(guild_id, str(log_channel.id))
-            if existing_update:
+            # Prüfe ob dieser Update-Channel bereits mit einem anderen Log-Channel verbunden ist
+            existing_log = self.bot.channel_manager.get_log_channel(guild_id, str(update_channel.id))
+            if existing_log and existing_log != str(log_channel.id):
                 await interaction.response.send_message(
-                    f"⚠️ Der Log-Kanal {log_channel.mention} ist bereits mit Update-Kanal <#{existing_update}> verbunden."
+                    f"⚠️ Der Update-Kanal {update_channel.mention} ist bereits mit einem anderen Log-Kanal verbunden."
                 )
                 return
 
             owner_id = owner.id if owner else None
-            self.bot.channel_manager.add_channel_pair(
+            success = self.bot.channel_manager.add_channel_pair(
                 guild_id,
                 str(log_channel.id),
                 str(update_channel.id),
                 owner_id
             )
             
-            await self.bot.channel_manager.setup_update_channel(update_channel, BotStatus.ONLINE)
-            
-            response = f"✅ Erfolgreich verbunden:\nLog-Kanal: {log_channel.mention}\nUpdate-Kanal: {update_channel.mention}"
-            if owner:
-                response += f"\nBot-Owner: {owner.mention}"
-            
-            await interaction.response.send_message(response)
+            if success:
+                await self.bot.channel_manager.setup_update_channel(update_channel, BotStatus.ONLINE)
+                
+                # Prüfe ob es bereits andere Update-Channels für diesen Log-Channel gibt
+                all_update_channels = self.bot.channel_manager.get_update_channels(guild_id, str(log_channel.id))
+                
+                if len(all_update_channels) > 1:
+                    response = f"✅ Zusätzlicher Update-Channel hinzugefügt:\nLog-Kanal: {log_channel.mention}\nUpdate-Kanal: {update_channel.mention}\n\n📊 Dieser Log-Channel hat jetzt {len(all_update_channels)} Update-Channels"
+                else:
+                    response = f"✅ Erfolgreich verbunden:\nLog-Kanal: {log_channel.mention}\nUpdate-Kanal: {update_channel.mention}"
+                
+                if owner and len(all_update_channels) == 1:  # Owner nur beim ersten Channel anzeigen
+                    response += f"\nBot-Owner: {owner.mention}"
+                
+                await interaction.response.send_message(response)
+            else:
+                await interaction.response.send_message(
+                    f"⚠️ Der Update-Kanal {update_channel.mention} ist bereits mit Log-Kanal {log_channel.mention} verbunden."
+                )
         
         except Exception as e:
             logger.error(f"Error adding channels: {e}", exc_info=True)
             await interaction.response.send_message("❌ Es gab einen Fehler beim Hinzufügen der Kanäle.")
 
+    @app_commands.command(name="addupdatechannel")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def add_update_channel(
+        self,
+        interaction: discord.Interaction,
+        log_channel: discord.TextChannel,
+        update_channel: discord.TextChannel
+    ):
+        """
+        Fügt einen zusätzlichen Update-Kanal zu einem bestehenden Log-Kanal hinzu
+        
+        Parameters
+        ----------
+        log_channel : Der bereits konfigurierte Log-Kanal
+        update_channel : Der zusätzliche Update-Kanal
+        """
+        try:
+            guild_id = str(interaction.guild_id)
+            
+            # Prüfe ob der Log-Channel bereits existiert
+            existing_updates = self.bot.channel_manager.get_update_channels(guild_id, str(log_channel.id))
+            if not existing_updates:
+                await interaction.response.send_message(
+                    f"⚠️ Der Log-Kanal {log_channel.mention} ist noch nicht konfiguriert. Verwende `/addchannels` zuerst."
+                )
+                return
+            
+            # Prüfe ob dieser Update-Channel bereits mit einem anderen Log-Channel verbunden ist
+            existing_log = self.bot.channel_manager.get_log_channel(guild_id, str(update_channel.id))
+            if existing_log and existing_log != str(log_channel.id):
+                await interaction.response.send_message(
+                    f"⚠️ Der Update-Kanal {update_channel.mention} ist bereits mit einem anderen Log-Kanal verbunden."
+                )
+                return
+            
+            success = self.bot.channel_manager.add_update_channel(
+                guild_id,
+                str(log_channel.id),
+                str(update_channel.id)
+            )
+            
+            if success:
+                await self.bot.channel_manager.setup_update_channel(update_channel, BotStatus.ONLINE)
+                
+                all_update_channels = self.bot.channel_manager.get_update_channels(guild_id, str(log_channel.id))
+                
+                await interaction.response.send_message(
+                    f"✅ Zusätzlicher Update-Kanal hinzugefügt:\nLog-Kanal: {log_channel.mention}\nNeuer Update-Kanal: {update_channel.mention}\n\n📊 Dieser Log-Channel hat jetzt {len(all_update_channels)} Update-Channels"
+                )
+            else:
+                await interaction.response.send_message(
+                    f"⚠️ Der Update-Kanal {update_channel.mention} ist bereits mit diesem Log-Kanal verbunden."
+                )
+        
+        except Exception as e:
+            logger.error(f"Error adding update channel: {e}", exc_info=True)
+            await interaction.response.send_message("❌ Es gab einen Fehler beim Hinzufügen des Update-Kanals.")
+
+    @app_commands.command(name="removeupdatechannel")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def remove_update_channel(
+        self,
+        interaction: discord.Interaction,
+        log_channel: discord.TextChannel,
+        update_channel: discord.TextChannel
+    ):
+        """
+        Entfernt einen spezifischen Update-Kanal von einem Log-Kanal
+        
+        Parameters
+        ----------
+        log_channel : Der Log-Kanal
+        update_channel : Der zu entfernende Update-Kanal
+        """
+        try:
+            guild_id = str(interaction.guild_id)
+            
+            success = self.bot.channel_manager.remove_update_channel(
+                guild_id,
+                str(log_channel.id),
+                str(update_channel.id)
+            )
+            
+            if success:
+                remaining_channels = self.bot.channel_manager.get_update_channels(guild_id, str(log_channel.id))
+                
+                if remaining_channels:
+                    await interaction.response.send_message(
+                        f"✅ Update-Kanal entfernt:\nUpdate-Kanal: {update_channel.mention}\n\n📊 Verbleibende Update-Channels für {log_channel.mention}: {len(remaining_channels)}"
+                    )
+                else:
+                    await interaction.response.send_message(
+                        f"✅ Letzter Update-Kanal entfernt - komplette Konfiguration für {log_channel.mention} wurde gelöscht."
+                    )
+            else:
+                await interaction.response.send_message(
+                    f"⚠️ Der Update-Kanal {update_channel.mention} war nicht mit {log_channel.mention} verbunden."
+                )
+                
+        except Exception as e:
+            logger.error(f"Error removing update channel: {e}", exc_info=True)
+            await interaction.response.send_message("❌ Es gab einen Fehler beim Entfernen des Update-Kanals.")
+
     @app_commands.command(name="removechannels")
     @app_commands.checks.has_permissions(administrator=True)
     async def remove_channels(self, interaction: discord.Interaction, log_channel: discord.TextChannel):
-        """Entfernt einen Log- und den zugehörigen Update-Kanal"""
+        """Entfernt einen Log-Kanal und alle zugehörigen Update-Kanäle"""
         try:
             guild_id = str(interaction.guild_id)
-            update_channel_id = self.bot.channel_manager.remove_channel_pair(guild_id, str(log_channel.id))
+            update_channel_ids = self.bot.channel_manager.remove_channel_pair(guild_id, str(log_channel.id))
             
-            if update_channel_id:
+            if update_channel_ids:
                 if str(log_channel.id) in self.bot.status_manager.last_known_status:
                     del self.bot.status_manager.last_known_status[str(log_channel.id)]
                     self.bot.data_manager.save_json(self.bot.status_manager.last_known_status, "last_known_status.json")
                 
+                if len(update_channel_ids) == 1:
+                    channel_info = f"Update-Kanal: <#{update_channel_ids[0]}>"
+                else:
+                    channel_mentions = [f"<#{uid}>" for uid in update_channel_ids]
+                    channel_info = f"Update-Kanäle ({len(update_channel_ids)}): {', '.join(channel_mentions)}"
+                
                 await interaction.response.send_message(
-                    f"✅ Kanäle entfernt:\nLog-Kanal: {log_channel.mention}\nUpdate-Kanal: <#{update_channel_id}>"
+                    f"✅ Kanäle entfernt:\nLog-Kanal: {log_channel.mention}\n{channel_info}"
                 )
             else:
                 await interaction.response.send_message(f"⚠️ Keine Konfiguration für {log_channel.mention} gefunden.")
@@ -127,11 +249,18 @@ class ChannelCommands(commands.Cog):
             channel_pairs = self.bot.channel_manager.get_channel_pairs(guild_id)
             for pair in channel_pairs:
                 log_id = pair['log_channel']
-                update_id = pair['update_channel']
+                update_ids = pair['update_channels']  # Jetzt eine Liste
                 status = self.bot.status_manager.last_known_status.get(log_id, "unbekannt")
                 owner_id = self.bot.channel_manager.get_channel_owner(guild_id, log_id)
                 owner_info = f" (Owner: <@{owner_id}>)" if owner_id else ""
-                status_info += f"Log: <#{log_id}> → Update: <#{update_id}> (Status: {status}){owner_info}\n"
+                
+                if len(update_ids) == 1:
+                    update_info = f"<#{update_ids[0]}>"
+                else:
+                    update_mentions = [f"<#{uid}>" for uid in update_ids]
+                    update_info = f"{len(update_ids)} Kanäle: {', '.join(update_mentions)}"
+                
+                status_info += f"Log: <#{log_id}> → Update: {update_info} (Status: {status}){owner_info}\n"
             
             embed.add_field(
                 name="Eingerichtete Kanalpaare",

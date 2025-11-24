@@ -15,14 +15,48 @@ from core.log_manager import setup_bot_logging
 # Konfiguriere Logging
 def setup_logging():
     """Konfiguriert das erweiterte Logging-System"""
-    # Verwende den neuen AdvancedLogManager
-    return setup_bot_logging('HelperBot', logging.INFO)
+    try:
+        # Verwende den neuen AdvancedLogManager
+        logger = setup_bot_logging('HelperBot', logging.INFO)
+        
+        # Teste das Logging sofort
+        logger.info("Helper Bot Logging initialisiert - Test erfolgreich")
+        print(f"[HELPER] Logger konfiguriert: {logger.name}")
+        print(f"[HELPER] Logger Level: {logger.level}")
+        print(f"[HELPER] Logger Handlers: {len(logger.handlers)}")
+        for i, handler in enumerate(logger.handlers):
+            print(f"[HELPER] Handler {i}: {type(handler).__name__}")
+            if hasattr(handler, 'baseFilename'):
+                print(f"[HELPER] Log-Datei: {handler.baseFilename}")
+        
+        return logger
+    except Exception as e:
+        print(f"[ERROR] Helper Bot Logging Setup fehlgeschlagen: {e}")
+        # Fallback auf Standard-Logging
+        import logging
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.StreamHandler(),
+                logging.FileHandler('logs/helperbot_fallback.log', encoding='utf-8')
+            ]
+        )
+        fallback_logger = logging.getLogger('HelperBot_Fallback')
+        fallback_logger.error(f"Fallback auf Standard-Logging: {e}")
+        return fallback_logger
 
 # Initialisiere Logger
+print("[HELPER] Starte Helper Bot Logging-Setup...")
 logger = setup_logging()
+print(f"[HELPER] Logging-Setup abgeschlossen. Logger: {logger}")
 
 class HelperBot(discord.Client):
     def __init__(self):
+        # Sofortiges Logging beim Start
+        print("[HELPER] Helper Bot __init__ gestartet")
+        logger.info("=== Helper Bot Initialisierung gestartet ===")
+        
         intents = discord.Intents.default()
         intents.members = True
         intents.guild_messages = True
@@ -34,8 +68,10 @@ class HelperBot(discord.Client):
         self.tasks_file = self.data_dir / 'json' / 'helper_tasks.json'
         self.results_file = self.data_dir / 'json' / 'helper_results.json'
         
-        logger.debug(f"Tasks-Datei-Pfad: {self.tasks_file}")
-        logger.debug(f"Results-Datei-Pfad: {self.results_file}")
+        logger.info(f"Tasks-Datei-Pfad: {self.tasks_file}")
+        logger.info(f"Results-Datei-Pfad: {self.results_file}")
+        print(f"[HELPER] Tasks-Datei: {self.tasks_file}")
+        print(f"[HELPER] Results-Datei: {self.results_file}")
         
         # Task-Queue und Status
         self.tasks = []
@@ -47,21 +83,66 @@ class HelperBot(discord.Client):
         self.channel_cache = {}
         self.role_cache = {}
         
+        # Startup-Timestamp für Debugging
+        self.startup_time = time.time()
+        logger.info(f"Helper Bot Initialisierung abgeschlossen - Startup Time: {self.startup_time}")
+        print(f"[HELPER] Initialisierung abgeschlossen um {datetime.fromtimestamp(self.startup_time)}")
+        
     async def on_ready(self):
         """Wenn der Bot bereit ist"""
-        logger.info(f"HelperBot gestartet als: {self.user.name} ({self.user.id})")
+        ready_time = time.time()
+        startup_duration = ready_time - self.startup_time
+        
+        logger.info(f"🤖 HelperBot gestartet als: {self.user.name} ({self.user.id})")
+        logger.info(f"⏱️ Startup-Dauer: {startup_duration:.2f} Sekunden")
+        logger.info(f"🏠 Verbunden mit {len(self.guilds)} Servern")
+        
+        print(f"[HELPER] ✅ Bot bereit: {self.user.name}")
+        print(f"[HELPER] ⏱️ Startup-Dauer: {startup_duration:.2f}s")
+        print(f"[HELPER] 🏠 Server: {len(self.guilds)}")
+        
+        for guild in self.guilds:
+            logger.info(f"📊 Verbunden mit Server: {guild.name} ({guild.id})")
+            print(f"[HELPER] Server: {guild.name}")
         
         # Starte Task-Check-Schleife
+        logger.info("🔄 Starte Task-Prüfschleife...")
+        print("[HELPER] 🔄 Starte Task-Überwachung...")
         self.bg_task = self.loop.create_task(self.check_tasks_loop())
+        
+        # Gesundheitscheck-Log
+        logger.info("💚 Helper Bot vollständig initialisiert und betriebsbereit")
+        print("[HELPER] 💚 Helper Bot ist betriebsbereit!")
+        
+    async def on_connect(self):
+        """Wenn der Bot sich verbindet"""
+        logger.info("🔗 Helper Bot verbindet sich mit Discord...")
+        print("[HELPER] 🔗 Verbindung zu Discord wird hergestellt...")
+        
+    async def on_disconnect(self):
+        """Wenn der Bot getrennt wird"""
+        logger.warning("⚠️ Helper Bot von Discord getrennt")
+        print("[HELPER] ⚠️ Verbindung zu Discord getrennt")
+        
+    async def on_resumed(self):
+        """Wenn die Session wiederhergestellt wird"""
+        logger.info("🔄 Helper Bot Session wiederhergestellt")
+        print("[HELPER] 🔄 Session wiederhergestellt")
         
     async def check_tasks_loop(self):
         """Prüft regelmäßig auf neue Aufgaben und verarbeitet diese"""
         await self.wait_until_ready()
-        logger.info("Task-Prüfschleife gestartet")
+        logger.info("🔄 Task-Prüfschleife gestartet")
+        print("[HELPER] 🔄 Task-Überwachung aktiv")
+        
         last_info_log = 0
+        task_count = 0
         
         while not self.is_closed():
             try:
+                current_time = time.time()
+                tasks_processed = False
+                
                 # Prüfe channel_states.json
                 states_file = Path(self.data_dir) / "json" / "channel_states.json"
                 
@@ -69,9 +150,14 @@ class HelperBot(discord.Client):
                     try:
                         with open(states_file, 'r', encoding='utf-8') as f:
                             channel_states = json.loads(f.read())
+                        
+                        # Log nur bei der ersten Überprüfung oder alle 5 Minuten
+                        if current_time - last_info_log > 300:
+                            logger.info(f"📊 Überprüfe {len(channel_states)} Channel-States")
+                            print(f"[HELPER] 📊 {len(channel_states)} Channel-States zu prüfen")
                             
-                        current_time = time.time()
                         changes_made = False
+                        pending_tasks = 0
                         
                         # Verarbeite jeden Channel-State
                         for channel_id, state in channel_states.items():
@@ -79,6 +165,8 @@ class HelperBot(discord.Client):
                             if state.get('completed', False):
                                 continue
                                 
+                            pending_tasks += 1
+                            
                             # Prüfe ob die Änderung älter als 5 Sekunden ist und noch nicht abgeschlossen
                             if (current_time - state['last_update'] >= 5 and 
                                 current_time - state.get('last_attempt', 0) >= 5):
@@ -91,35 +179,47 @@ class HelperBot(discord.Client):
                                         
                                         # Prüfe ob die Änderung noch notwendig ist
                                         if current_name != desired_name:
-                                            logger.info(f"Versuche Channel-Update für {channel_id}: "
+                                            logger.info(f"🔧 Versuche Channel-Update für {channel_id}: "
                                                       f"'{current_name}' -> '{desired_name}'")
+                                            print(f"[HELPER] 🔧 Update: {current_name} -> {desired_name}")
                                             
                                             try:
                                                 await channel.edit(name=desired_name)
-                                                logger.info(f"Channel {channel_id} erfolgreich auf "
+                                                logger.info(f"✅ Channel {channel_id} erfolgreich auf "
                                                           f"'{desired_name}' aktualisiert")
+                                                print(f"[HELPER] ✅ Erfolgreich: {desired_name}")
                                                 state['completed'] = True
                                                 changes_made = True
+                                                tasks_processed = True
+                                                task_count += 1
                                                 
                                             except discord.HTTPException as e:
                                                 if e.status == 429:  # Rate limit
-                                                    retry_after = e.retry_after
-                                                    logger.warning(f"Rate limit erreicht, warte "
+                                                    retry_after = getattr(e, 'retry_after', 60)
+                                                    logger.warning(f"⏰ Rate limit erreicht, warte "
                                                                  f"{retry_after} Sekunden")
+                                                    print(f"[HELPER] ⏰ Rate limit: {retry_after}s warten")
                                                     state['last_attempt'] = current_time
                                                     changes_made = True
-                                                    await asyncio.sleep(retry_after)
+                                                    await asyncio.sleep(min(retry_after, 60))
                                                 else:
-                                                    logger.error(f"HTTP-Fehler beim Channel-Update: {e}")
+                                                    logger.error(f"❌ HTTP-Fehler beim Channel-Update: {e}")
+                                                    print(f"[HELPER] ❌ HTTP-Fehler: {e}")
                                                     state['completed'] = True  # Markiere als abgeschlossen bei Fehler
                                                     changes_made = True
                                         else:
                                             # Name ist bereits korrekt
+                                            logger.debug(f"✓ Channel {channel_id} ist bereits '{desired_name}'")
                                             state['completed'] = True
                                             changes_made = True
+                                    else:
+                                        logger.warning(f"⚠️ Channel {channel_id} nicht gefunden")
+                                        state['completed'] = True  # Markiere als abgeschlossen
+                                        changes_made = True
                                             
                                 except Exception as e:
-                                    logger.error(f"Fehler bei der Verarbeitung von Channel {channel_id}: {e}")
+                                    logger.error(f"❌ Fehler bei der Verarbeitung von Channel {channel_id}: {e}")
+                                    print(f"[HELPER] ❌ Channel-Fehler {channel_id}: {e}")
                                     state['completed'] = True  # Markiere als abgeschlossen bei Fehler
                                     changes_made = True
                         
@@ -127,20 +227,39 @@ class HelperBot(discord.Client):
                         if changes_made:
                             with open(states_file, 'w', encoding='utf-8') as f:
                                 json.dump(channel_states, f, indent=2)
+                            logger.debug(f"💾 Channel-States gespeichert ({len(channel_states)} Einträge)")
+                        
+                        # Status-Log alle 5 Minuten oder bei Aktivität
+                        if current_time - last_info_log > 300 or tasks_processed:
+                            if pending_tasks > 0:
+                                logger.info(f"📈 {pending_tasks} ausstehende Tasks, {task_count} gesamt verarbeitet")
+                                print(f"[HELPER] 📈 {pending_tasks} ausstehend, {task_count} erledigt")
+                            else:
+                                logger.info(f"✅ Alle Channel-Updates abgeschlossen ({task_count} gesamt)")
+                                print(f"[HELPER] ✅ Alle Updates fertig ({task_count} gesamt)")
+                            last_info_log = current_time
                                 
                     except json.JSONDecodeError as e:
-                        logger.error(f"Ungültiges JSON in channel_states.json: {e}")
+                        logger.error(f"❌ Ungültiges JSON in channel_states.json: {e}")
+                        print(f"[HELPER] ❌ JSON-Fehler: {e}")
                     except Exception as e:
-                        logger.error(f"Fehler beim Verarbeiten der Channel-States: {e}")
+                        logger.error(f"❌ Fehler beim Verarbeiten der Channel-States: {e}")
+                        print(f"[HELPER] ❌ States-Fehler: {e}")
+                else:
+                    # Datei existiert nicht - Log nur alle 5 Minuten
+                    if current_time - last_info_log > 300:
+                        logger.debug("📂 Keine channel_states.json gefunden")
+                        last_info_log = current_time
                 
-                # Log nur alle 5 Minuten wenn keine Aktivität
-                current_time = time.time()
-                if current_time - last_info_log > 300:
-                    logger.info("Helper-Bot aktiv - Überwache Channel-States")
+                # Heartbeat-Log alle 5 Minuten wenn keine Aktivität
+                if not tasks_processed and current_time - last_info_log > 300:
+                    logger.info(f"💚 Helper Bot aktiv - {task_count} Tasks gesamt verarbeitet")
+                    print(f"[HELPER] 💚 Aktiv - {task_count} Tasks erledigt")
                     last_info_log = current_time
                     
             except Exception as e:
-                logger.error(f"Unerwarteter Fehler in der Task-Schleife: {e}", exc_info=True)
+                logger.error(f"💥 Unerwarteter Fehler in der Task-Schleife: {e}", exc_info=True)
+                print(f"[HELPER] 💥 Task-Schleife Fehler: {e}")
                 
             await asyncio.sleep(0.1)  # Kurze Pause zwischen den Prüfungen
     
@@ -213,6 +332,8 @@ class HelperBot(discord.Client):
                 if task_type == 'update_channel_name':
                     result = await self.update_channel_name(task)
                 elif task_type == 'lock_channel':
+                    result = await self.update_channel_lock(task)
+                elif task_type == 'update_channel_lock':
                     result = await self.update_channel_lock(task)
                 else:
                     logger.warning(f"Unbekannter Aufgabentyp: {task_type}")

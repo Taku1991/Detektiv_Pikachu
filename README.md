@@ -68,6 +68,8 @@ Ein intelligenter Discord-Bot zur **automatischen Überwachung und Verwaltung vo
 | `/sethistory <channel>` | Setzt den History-Channel für Status-Änderungen | Bestimmt wo Status-Verlauf geloggt wird |
 | `/toggle <status>` | Ändert Bot-Status manuell | Status: Online, Offline, Problem, Wartung |
 | `/balancerstatus` | Zeigt Token-Balancer-Status an | Übersicht über Primary/Secondary Token-Nutzung |
+| `/sync` | Synchronisiert Slash-Commands manuell | Behebt Command-Sync-Probleme |
+| `/reloadcogs` | Lädt alle Cogs neu | Lösung für PyInstaller/Cog-Probleme |
 | `/logstats` | Zeigt Log-Datei-Statistiken an | Dateigröße, Anzahl, Komprimierung, etc. |
 | `/cleanlogs` | Startet manuelle Log-Bereinigung | Entfernt alte Log-Dateien und zeigt Statistiken |
 
@@ -106,6 +108,84 @@ Ein intelligenter Discord-Bot zur **automatischen Überwachung und Verwaltung vo
 - Automatische Benachrichtigungen bei Problemen
 - Wartungsmodus für geplante Updates
 
+## 🛠️ Troubleshooting
+
+### 🔧 **Slash-Commands werden nicht angezeigt**
+
+Falls die `/` Befehle nicht in Discord angezeigt werden:
+
+1. **Überprüfe die Logs**: Schaue in `logs/statusbot.log` nach Fehlermeldungen beim Cog-Loading oder Command-Sync
+2. **Bot-Berechtigungen**: Stelle sicher, dass der Bot die `applications.commands` Berechtigung hat
+3. **Manueller Sync**: Verwende `!sync` (Prefix-Command) als Administrator
+4. **Discord-Cache**: Warte 1-2 Minuten oder starte Discord neu
+5. **Bot neu starten**: Starte den Bot komplett neu
+
+**Häufige Ursachen:**
+- **Cog-Verzeichnisse nicht gefunden** (Pfad-Problem)
+- **Fehler beim Laden der Cogs** (siehe Logs)
+- **Rate-Limits bei der Discord API**
+- **Fehlende Bot-Berechtigungen**
+- **Netzwerk-Probleme während der Synchronisation**
+
+**Lösungsschritte:**
+
+1. **Überprüfe die Logs** für Cog-Loading-Fehler:
+   ```bash
+   grep -i "cog\|command sync" logs/statusbot.log | tail -30
+   ```
+
+2. **Pfad-Diagnose** in den Logs suchen:
+   ```
+   🔍 Suche Cogs-Verzeichnis in folgenden Pfaden:
+   📁 Basis Cogs-Verzeichnis: [Pfad]
+   ```
+
+3. **PyInstaller EXE-Problem** (falls du eine .exe verwendest):
+   ```bash
+   # Verwende das Fixed-Build-Script
+   python build_gui_with_api_fixed.py
+   ```
+
+4. **Manuelle Commands** (als Administrator):
+   - `!sync` - Manueller Command-Sync (Prefix)
+   - `/sync` - Manueller Command-Sync (Slash)
+   - `/reloadcogs` - Lädt alle Cogs neu
+
+5. **Erfolgreiche Pfad-Auflösung erkennbar an:**
+   ```
+   ✅ Verwende Cogs-Verzeichnis: [Pfad]
+   📦 Versuche X Cogs zu laden: [Liste]
+   ```
+
+6. **PyInstaller EXE-Logs prüfen:**
+   ```
+   🔧 PyInstaller-Modus erkannt - _MEIPASS: [Pfad]
+   ✅ Direct import successful: cogs.admin.admin_commands
+   ```
+
+7. **Erfolgreiche Synchronisation erkennbar an:**
+   ```
+   ✅ Successfully synced X command(s): [help, addchannels, ...]
+   ```
+
+### 🔧 **PyInstaller EXE-Spezifische Probleme**
+
+Falls du eine .exe mit PyInstaller erstellt hast:
+
+**Problem**: Cogs-Verzeichnisse werden nicht gefunden
+**Lösung**: 
+1. Verwende `python build_gui_with_api_fixed.py` statt des normalen Build-Scripts
+2. Die neue .spec-Datei bindet alle Cogs korrekt ein
+3. PyInstaller-spezifische Import-Fallbacks sind implementiert
+
+**Erkennungszeichen in den Logs**:
+```
+🔧 PyInstaller-Modus erkannt
+✅ Direct import successful: [Cog-Name]
+🎮 Verfügbare Slash-Commands: [Liste]
+```
+
+### 🔧 **Weitere häufige Probleme**
 
 ## 🚀 Download & Installation
 

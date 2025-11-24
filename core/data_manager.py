@@ -2,6 +2,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Union, Dict, List
+from filelock import FileLock, Timeout
 
 logger = logging.getLogger('StatusBot')
 logger.setLevel(logging.DEBUG)  # Debug-Level für detailliertere Logs
@@ -14,10 +15,10 @@ class DataManager:
         logger.info(f"Initialized DataManager with directory: {data_dir}")
 
     def load_json(self, filename: str) -> Union[Dict, List, Any]:
-        """Load data from a JSON file"""
+        """Load data from a JSON file with file locking to prevent race conditions"""
         try:
             path = self.data_dir / "json" / filename  # Explizit json-Unterverzeichnis hinzufügen
-            
+
             # Prüfe, ob die Datei existiert
             if not path.exists():
                 fallback_path = self.data_dir / filename  # Versuche ohne json-Unterverzeichnis
@@ -27,19 +28,26 @@ class DataManager:
                 else:
                     logger.warning(f"Datei {filename} existiert nicht unter {path} oder {fallback_path}")
                     return {}
-            
+
             # Prüfe ob die Datei leer ist
             if path.stat().st_size == 0:
                 logger.warning(f"Datei {filename} ist leer")
                 return {}
-                
+
             # Debug-Info
-            logger.info(f"Lade JSON aus {path} (Dateigröße: {path.stat().st_size} Bytes)")
-            
-            with open(path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                logger.info(f"Erfolgreich geladen: {filename} enthält {type(data).__name__} mit {len(data) if isinstance(data, (dict, list)) else 'N/A'} Elementen")
-                return data
+            logger.debug(f"Lade JSON aus {path} (Dateigröße: {path.stat().st_size} Bytes)")
+
+            # File-Locking für Thread-Safety
+            lock_path = path.with_suffix('.lock')
+            try:
+                with FileLock(lock_path, timeout=10):
+                    with open(path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        logger.debug(f"Erfolgreich geladen: {filename} enthält {type(data).__name__} mit {len(data) if isinstance(data, (dict, list)) else 'N/A'} Elementen")
+                        return data
+            except Timeout:
+                logger.error(f"Timeout beim Warten auf Lock für {filename} - andere Instanz blockiert die Datei")
+                return {}
         except json.JSONDecodeError as e:
             logger.error(f"Fehler beim Dekodieren von JSON aus {filename}: {e}")
             return {}
@@ -47,41 +55,56 @@ class DataManager:
             logger.error(f"Zeichenkodierungsfehler beim Lesen von {filename}: {e}")
             try:
                 # Versuche mit Latin-1
-                with open(self.data_dir / filename, 'r', encoding='latin-1') as f:
+                with open(path, 'r', encoding='latin-1') as f:
                     data = json.load(f)
                     logger.warning(f"Datei {filename} mit Latin-1-Kodierung geladen (sollte UTF-8 sein)")
                     return data
             except Exception as fallback_e:
                 logger.error(f"Auch Fallback-Kodierung fehlgeschlagen: {fallback_e}")
-                return {}
+                try:
+                    # Versuche mit cp1252 (Windows-1252)
+                    with open(path, 'r', encoding='cp1252') as f:
+                        data = json.load(f)
+                        logger.warning(f"Datei {filename} mit cp1252-Kodierung geladen (sollte UTF-8 sein)")
+                        return data
+                except Exception as final_e:
+                    logger.error(f"Alle Encoding-Fallbacks fehlgeschlagen: {final_e}")
+                    return {}
         except Exception as e:
             logger.error(f"Fehler beim Laden von {filename}: {e}")
             return {}
 
     def save_json(self, data: Union[Dict, List, Any], filename: str) -> bool:
-        """Save data to a JSON file"""
+        """Save data to a JSON file with file locking to prevent race conditions"""
         try:
             # Stelle sicher, dass das json-Verzeichnis existiert
             json_dir = self.data_dir / "json"
             json_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Speichere im json-Unterverzeichnis
             path = json_dir / filename
-            
+
             # Debug-Info
             logger.debug(f"Speichere JSON in {path}")
-            
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=4, ensure_ascii=False)
-                
-            # Überprüfe, ob die Datei erfolgreich geschrieben wurde
-            if path.exists() and path.stat().st_size > 0:
-                logger.info(f"Erfolgreich gespeichert: {filename} ({path.stat().st_size} Bytes)")
-                return True
-            else:
-                logger.error(f"Datei {filename} wurde nicht korrekt geschrieben")
+
+            # File-Locking für Thread-Safety (kritisch bei Dual-Bot-System!)
+            lock_path = path.with_suffix('.lock')
+            try:
+                with FileLock(lock_path, timeout=10):
+                    with open(path, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, indent=4, ensure_ascii=False)
+
+                    # Überprüfe, ob die Datei erfolgreich geschrieben wurde
+                    if path.exists() and path.stat().st_size > 0:
+                        logger.debug(f"Erfolgreich gespeichert: {filename} ({path.stat().st_size} Bytes)")
+                        return True
+                    else:
+                        logger.error(f"Datei {filename} wurde nicht korrekt geschrieben")
+                        return False
+            except Timeout:
+                logger.error(f"Timeout beim Warten auf Lock für {filename} - andere Instanz blockiert die Datei")
                 return False
-                
+
         except Exception as e:
             logger.error(f"Fehler beim Speichern von {filename}: {e}", exc_info=True)
             return False

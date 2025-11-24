@@ -1,10 +1,46 @@
 import os
+import sys
 from pathlib import Path
 from typing import Tuple
 import logging
 from dotenv import load_dotenv
 
 logger = logging.getLogger('ConfigLoader')
+
+def get_env_path() -> Path:
+    """
+    Bestimmt den korrekten Pfad zur .env-Datei.
+    Berücksichtigt PyInstaller-Builds und normale Python-Ausführung.
+    """
+    # Mögliche Pfade für die .env-Datei
+    potential_paths = []
+    
+    # 1. Neben der .exe (für PyInstaller)
+    if getattr(sys, 'frozen', False):
+        exe_dir = Path(sys.executable).parent
+        potential_paths.append(exe_dir / '.env')
+        print(f"[CONFIG] PyInstaller erkannt - .exe Verzeichnis: {exe_dir}")
+    
+    # 2. Aktuelles Working Directory
+    potential_paths.append(Path.cwd() / '.env')
+    
+    # 3. Verzeichnis der Python-Datei (für normale Ausführung)
+    potential_paths.append(Path(__file__).parent.parent / '.env')
+    
+    # Suche in allen möglichen Pfaden
+    for path in potential_paths:
+        print(f"[CONFIG] Suche .env in: {path}")
+        if path.exists():
+            print(f"[CONFIG] ✅ .env gefunden: {path}")
+            return path
+    
+    # Keine .env-Datei gefunden
+    print(f"[CONFIG] ❌ .env nicht gefunden. Suchpfade waren:")
+    for path in potential_paths:
+        print(f"[CONFIG]   - {path}")
+    
+    # Verwende den ersten Pfad als Fallback für Fehlermeldung
+    return potential_paths[0]
 
 def load_config() -> Tuple[str, str, str]:
     """
@@ -14,8 +50,9 @@ def load_config() -> Tuple[str, str, str]:
         Tuple[str, str, str]: (primary_token, helper_token, command_prefix)
     """
     try:
-        # Lade .env Datei aus dem Hauptverzeichnis
-        env_path = Path(__file__).parent.parent / '.env'
+        # Bestimme den korrekten Pfad zur .env-Datei
+        env_path = get_env_path()
+        
         if not env_path.exists():
             raise FileNotFoundError(
                 f".env Datei nicht gefunden: {env_path}\n"

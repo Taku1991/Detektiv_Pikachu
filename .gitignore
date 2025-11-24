@@ -88,3 +88,7 @@ Desktop.ini
 .DS_Store
 .AppleDouble
 .LSOverride 
+
+# Release Ordner
+/release/*
+/release_gui/*

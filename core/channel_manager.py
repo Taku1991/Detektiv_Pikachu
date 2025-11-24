@@ -21,6 +21,29 @@ class ChannelManager:
         # Rate-Limit-Tracking
         self._last_channel_name_ratelimit = 0
 
+    def _migrate_guild_channels_data(self):
+        """Migriert alte guild_channels Datenstruktur zu neuer (str -> List[str])"""
+        try:
+            if not hasattr(self.bot, 'guild_channels') or not self.bot.guild_channels:
+                return
+                
+            migrated = False
+            for guild_id, channels in self.bot.guild_channels.items():
+                for log_id, update_data in list(channels.items()):
+                    # Prüfe ob es bereits eine Liste ist
+                    if isinstance(update_data, str):
+                        # Konvertiere zu Liste
+                        self.bot.guild_channels[guild_id][log_id] = [update_data]
+                        migrated = True
+                        logger.info(f"Migriert Log-Channel {log_id} -> Update-Channel [{update_data}]")
+            
+            if migrated:
+                self._save_channel_pairs()
+                logger.info("Guild-Channels Datenstruktur erfolgreich migriert")
+                
+        except Exception as e:
+            logger.error(f"Fehler bei der Migration der guild_channels Daten: {e}", exc_info=True)
+
     async def update_channel_name(self, channel: discord.TextChannel, status: BotStatus):
         """Update channel name with status emoji"""
         try:
@@ -128,23 +151,76 @@ class ChannelManager:
         if guild_id not in self.bot.guild_channels:
             self.bot.guild_channels[guild_id] = {}
         
-        self.bot.guild_channels[guild_id][log_channel_id] = update_channel_id
+        # Neue Struktur: Log-Channel kann mehrere Update-Channels haben
+        if log_channel_id not in self.bot.guild_channels[guild_id]:
+            self.bot.guild_channels[guild_id][log_channel_id] = []
         
-        # Speichere den Owner wenn angegeben
-        if owner_id:
-            if guild_id not in self.channel_owners:
-                self.channel_owners[guild_id] = {}
-            self.channel_owners[guild_id][log_channel_id] = owner_id
-        
-        self._save_channel_pairs()
-        self._save_channel_owners()
-        logger.info(f"Added channel pair: Log {log_channel_id} -> Update {update_channel_id} (Owner: {owner_id})")
+        # Prüfe ob Update-Channel bereits vorhanden ist
+        if update_channel_id not in self.bot.guild_channels[guild_id][log_channel_id]:
+            self.bot.guild_channels[guild_id][log_channel_id].append(update_channel_id)
+            
+            # Speichere den Owner wenn angegeben (nur beim ersten Update-Channel)
+            if owner_id and len(self.bot.guild_channels[guild_id][log_channel_id]) == 1:
+                if guild_id not in self.channel_owners:
+                    self.channel_owners[guild_id] = {}
+                self.channel_owners[guild_id][log_channel_id] = owner_id
+            
+            self._save_channel_pairs()
+            self._save_channel_owners()
+            logger.info(f"Added channel pair: Log {log_channel_id} -> Update {update_channel_id} (Owner: {owner_id})")
+            return True
+        else:
+            logger.warning(f"Update-Channel {update_channel_id} bereits mit Log-Channel {log_channel_id} verbunden")
+            return False
 
-    def remove_channel_pair(self, guild_id: str, log_channel_id: str) -> Optional[str]:
-        """Remove a channel pair and return the update channel ID if it existed"""
-        update_channel_id = None
+    def add_update_channel(self, guild_id: str, log_channel_id: str, update_channel_id: str) -> bool:
+        """Fügt einen zusätzlichen Update-Channel zu einem bestehenden Log-Channel hinzu"""
+        if guild_id not in self.bot.guild_channels:
+            logger.warning(f"Guild {guild_id} nicht in guild_channels gefunden")
+            return False
+        
+        if log_channel_id not in self.bot.guild_channels[guild_id]:
+            logger.warning(f"Log-Channel {log_channel_id} nicht in Guild {guild_id} gefunden")
+            return False
+        
+        # Prüfe ob Update-Channel bereits vorhanden ist
+        if update_channel_id in self.bot.guild_channels[guild_id][log_channel_id]:
+            logger.warning(f"Update-Channel {update_channel_id} bereits mit Log-Channel {log_channel_id} verbunden")
+            return False
+        
+        # Füge Update-Channel hinzu
+        self.bot.guild_channels[guild_id][log_channel_id].append(update_channel_id)
+        self._save_channel_pairs()
+        logger.info(f"Added additional update channel: Log {log_channel_id} -> Update {update_channel_id}")
+        return True
+
+    def remove_update_channel(self, guild_id: str, log_channel_id: str, update_channel_id: str) -> bool:
+        """Entfernt einen spezifischen Update-Channel von einem Log-Channel"""
+        if guild_id not in self.bot.guild_channels:
+            return False
+        
+        if log_channel_id not in self.bot.guild_channels[guild_id]:
+            return False
+        
+        update_channels = self.bot.guild_channels[guild_id][log_channel_id]
+        if update_channel_id in update_channels:
+            update_channels.remove(update_channel_id)
+            
+            # Wenn keine Update-Channels mehr vorhanden, entferne den Log-Channel komplett
+            if not update_channels:
+                return self.remove_channel_pair(guild_id, log_channel_id) is not None
+            
+            self._save_channel_pairs()
+            logger.info(f"Removed update channel: {update_channel_id} from log channel {log_channel_id}")
+            return True
+        
+        return False
+
+    def remove_channel_pair(self, guild_id: str, log_channel_id: str) -> Optional[List[str]]:
+        """Remove a channel pair and return the update channel IDs if it existed"""
+        update_channel_ids = None
         if guild_id in self.bot.guild_channels and log_channel_id in self.bot.guild_channels[guild_id]:
-            update_channel_id = self.bot.guild_channels[guild_id].pop(log_channel_id)
+            update_channel_ids = self.bot.guild_channels[guild_id].pop(log_channel_id)
             
             # Entferne auch den Owner-Eintrag wenn vorhanden
             if guild_id in self.channel_owners and log_channel_id in self.channel_owners[guild_id]:
@@ -156,8 +232,8 @@ class ChannelManager:
             if not self.bot.guild_channels[guild_id]:
                 del self.bot.guild_channels[guild_id]
             self._save_channel_pairs()
-            logger.info(f"Removed channel pair: Log {log_channel_id} -> Update {update_channel_id}")
-        return update_channel_id
+            logger.info(f"Removed channel pair: Log {log_channel_id} -> Updates {update_channel_ids}")
+        return update_channel_ids
 
     def _save_channel_pairs(self):
         """Save the channel pairs to file"""
@@ -173,27 +249,52 @@ class ChannelManager:
         except Exception as e:
             logger.error(f"Error saving channel owners: {e}")
 
-    def get_channel_pairs(self, guild_id: str) -> List[Dict[str, str]]:
+    def get_channel_pairs(self, guild_id: str) -> List[Dict[str, any]]:
         """Get all channel pairs for a guild"""
         if guild_id in self.bot.guild_channels:
             pairs = []
-            for log_id, update_id in self.bot.guild_channels[guild_id].items():
+            for log_id, update_ids in self.bot.guild_channels[guild_id].items():
+                # Stelle sicher, dass update_ids eine Liste ist (Migration)
+                if isinstance(update_ids, str):
+                    update_ids = [update_ids]
+                    self.bot.guild_channels[guild_id][log_id] = update_ids
+                    self._save_channel_pairs()
+                
                 pairs.append({
                     'log_channel': log_id,
-                    'update_channel': update_id
+                    'update_channels': update_ids
                 })
             return pairs
         return []
 
+    def get_update_channels(self, guild_id: str, log_channel_id: str) -> List[str]:
+        """Get all update channel IDs for a given log channel"""
+        if guild_id in self.bot.guild_channels and log_channel_id in self.bot.guild_channels[guild_id]:
+            update_channels = self.bot.guild_channels[guild_id][log_channel_id]
+            # Stelle sicher, dass es eine Liste ist (Migration)
+            if isinstance(update_channels, str):
+                update_channels = [update_channels]
+                self.bot.guild_channels[guild_id][log_channel_id] = update_channels
+                self._save_channel_pairs()
+            return update_channels
+        return []
+
     def get_update_channel(self, guild_id: str, log_channel_id: str) -> Optional[str]:
-        """Get the update channel ID for a given log channel"""
-        return self.bot.guild_channels.get(guild_id, {}).get(log_channel_id)
+        """Get the first/primary update channel ID for a given log channel (backward compatibility)"""
+        update_channels = self.get_update_channels(guild_id, log_channel_id)
+        return update_channels[0] if update_channels else None
 
     def get_log_channel(self, guild_id: str, update_channel_id: str) -> Optional[str]:
         """Get the log channel ID for a given update channel"""
         if guild_id in self.bot.guild_channels:
-            for log_id, update_id in self.bot.guild_channels[guild_id].items():
-                if update_id == update_channel_id:
+            for log_id, update_ids in self.bot.guild_channels[guild_id].items():
+                # Stelle sicher, dass update_ids eine Liste ist
+                if isinstance(update_ids, str):
+                    update_ids = [update_ids]
+                    self.bot.guild_channels[guild_id][log_id] = update_ids
+                    self._save_channel_pairs()
+                
+                if update_channel_id in update_ids:
                     return log_id
         return None
 
@@ -208,6 +309,9 @@ class ChannelManager:
             self.excluded_channels = set(excluded_data if isinstance(excluded_data, list) else [])
             
             self.channel_owners = self.bot.data_manager.load_json("channel_owners.json")
+            
+            # Migriere guild_channels Datenstruktur falls nötig
+            self._migrate_guild_channels_data()
             
             # Debug-Ausgabe für geladene Daten
             logger.info(f"Excluded Channels: {len(self.excluded_channels)} Kanäle ausgeschlossen")
@@ -264,17 +368,34 @@ class ChannelManager:
                         continue  # Überspringen statt zu löschen
                     
                     # Prüfe jeden Channel in der Guild
-                    for log_id, update_id in channels.items():
+                    for log_id, update_ids in channels.items():
+                        # Stelle sicher, dass update_ids eine Liste ist
+                        if isinstance(update_ids, str):
+                            update_ids = [update_ids]
+                            self.bot.guild_channels[guild_id][log_id] = update_ids
+                        
                         log_channel = guild.get_channel(int(log_id))
-                        update_channel = guild.get_channel(int(update_id))
+                        
+                        # Prüfe alle Update-Channels
+                        valid_update_ids = []
+                        for update_id in update_ids:
+                            update_channel = guild.get_channel(int(update_id))
+                            if update_channel:
+                                valid_update_ids.append(update_id)
+                            else:
+                                logger.warning(f"Update-Channel {update_id} nicht mehr gefunden")
                         
                         # Debug-Logging für Channel-Check
                         logger.info(f"Prüfe Channels - Log: {log_id} ({log_channel.name if log_channel else 'nicht gefunden'}), "
-                                f"Update: {update_id} ({update_channel.name if update_channel else 'nicht gefunden'})")
+                                f"Updates: {len(valid_update_ids)}/{len(update_ids)} gültig")
                         
-                        if not log_channel or not update_channel:
+                        if not log_channel or not valid_update_ids:
                             channels_to_remove.append((guild_id, log_id))
-                            logger.warning(f"Ungültige Channels gefunden - Log: {log_id}, Update: {update_id}")
+                            logger.warning(f"Ungültige Channels gefunden - Log: {log_id}, Updates: {update_ids}")
+                        elif len(valid_update_ids) != len(update_ids):
+                            # Aktualisiere die Liste der gültigen Update-Channels
+                            self.bot.guild_channels[guild_id][log_id] = valid_update_ids
+                            logger.info(f"Update-Channel-Liste für Log {log_id} aktualisiert: {valid_update_ids}")
 
                 # Bestätigungslog vor dem Entfernen
                 if channels_to_remove:
@@ -284,7 +405,7 @@ class ChannelManager:
                 removed_count = 0
                 for guild_id, log_id in channels_to_remove:
                     if guild_id in self.bot.guild_channels and log_id in self.bot.guild_channels[guild_id]:
-                        update_id = self.bot.guild_channels[guild_id].pop(log_id)
+                        update_ids = self.bot.guild_channels[guild_id].pop(log_id)
                         
                         # Entferne Guild wenn keine Channels mehr übrig
                         if not self.bot.guild_channels[guild_id]:
@@ -304,20 +425,18 @@ class ChannelManager:
                                 del self.channel_owners[guild_id]
                         
                         removed_count += 1
-                        logger.info(f"Channel-Paar entfernt - Guild: {guild_id}, Log: {log_id}, Update: {update_id}")
+                        logger.info(f"Channel-Paar entfernt - Guild: {guild_id}, Log: {log_id}, Updates: {update_ids}")
 
                 # Speichere die aktualisierten Daten
                 if removed_count > 0:
                     self._save_channel_pairs()
-                    self._save_excluded_channels()
-                    self.bot.data_manager.save_json(self.bot.status_manager.last_known_status, "last_known_status.json")
                     self._save_channel_owners()
-                    logger.info(f"Cleanup abgeschlossen: {removed_count} ungültige Channel-Paare entfernt")
-                else:
-                    logger.info("Cleanup abgeschlossen: Keine ungültigen Channels gefunden")
-
+                    self.bot.data_manager.save_json(self.bot.status_manager.last_known_status, "last_known_status.json")
+                    
+                logger.info(f"Channel-Cleanup abgeschlossen. {removed_count} ungültige Channel-Paare entfernt.")
+                
             except Exception as e:
-                logger.error(f"Fehler beim Cleanup der Channels: {e}", exc_info=True)
+                logger.error(f"Fehler beim Channel-Cleanup: {e}", exc_info=True)
 
     async def delegate_to_helper(self, task_type: str, task_data: Dict) -> str:
         """Delegiert eine Aufgabe an den Helfer-Bot"""

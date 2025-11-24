@@ -3,20 +3,43 @@ import os
 import sys
 from dotenv import load_dotenv
 
-# Lade .env-Datei aus dem Hauptverzeichnis (nicht aus config/)
-# Angepasst für PyInstaller EXEs
-if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-    # Läuft als PyInstaller EXE
-    BASE_DIR = Path(sys.executable).parent
-else:
-    # Läuft als normale Python-Datei
-    BASE_DIR = Path(__file__).parent.parent
+# Robuste Pfad-Erkennung für PyInstaller und normale Python-Ausführung
+def get_base_dir_and_env_path():
+    """Bestimmt BASE_DIR und env_path für verschiedene Ausführungsarten"""
+    potential_paths = []
+    
+    # 1. Neben der .exe (für PyInstaller)
+    if getattr(sys, 'frozen', False):
+        exe_dir = Path(sys.executable).parent
+        potential_paths.append(exe_dir)
+        print(f"[CONSTANTS] PyInstaller erkannt - .exe Verzeichnis: {exe_dir}")
+    
+    # 2. Aktuelles Working Directory
+    potential_paths.append(Path.cwd())
+    
+    # 3. Verzeichnis der Python-Datei (für normale Ausführung)
+    potential_paths.append(Path(__file__).parent.parent)
+    
+    # Suche .env in allen möglichen Verzeichnissen
+    for base_dir in potential_paths:
+        env_path = base_dir / '.env'
+        print(f"[CONSTANTS] Suche .env in: {env_path}")
+        if env_path.exists():
+            print(f"[CONSTANTS] ✅ .env gefunden: {env_path}")
+            return base_dir, env_path
+    
+    # Keine .env-Datei gefunden - verwende erstes Verzeichnis
+    print(f"[CONSTANTS] ❌ .env nicht gefunden. Verwende: {potential_paths[0]}")
+    return potential_paths[0], potential_paths[0] / '.env'
 
-env_path = BASE_DIR / '.env'
+BASE_DIR, env_path = get_base_dir_and_env_path()
 
 # Versuche .env zu laden, falls sie existiert (graceful handling)
 if env_path.exists():
     load_dotenv(env_path)
+    print(f"[CONSTANTS] ✅ .env geladen: {env_path}")
+else:
+    print(f"[CONSTANTS] ⚠️ .env nicht gefunden: {env_path}")
 # Keine Warnung hier ausgeben - das macht der Launcher
 
 class BotConstants:
