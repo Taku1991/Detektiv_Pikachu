@@ -24,7 +24,8 @@ print("Logs-Verzeichnis:", logs_dir)
 def setup_logging():
     """Konfiguriert das erweiterte Logging-System"""
     # Verwende den neuen AdvancedLogManager
-    return setup_bot_logging('StatusBot', logging.DEBUG)
+    # INFO statt DEBUG: verhindert Debug-Flood in systemd-journal/syslog
+    return setup_bot_logging('StatusBot', logging.INFO)
 
 # Setup Logging HIER - NICHT im if __name__ == "__main__":
 print("Aktuelles Arbeitsverzeichnis:", os.getcwd())
@@ -608,12 +609,45 @@ class BotTokenBalancer:
         except Exception as e:
             self.logger.error(f"Fehler beim Senden der täglichen Zusammenfassung: {e}")
 
+def start_api_server():
+    """Startet den Flask API-Server in einem Hintergrund-Thread"""
+    try:
+        from api_server import app
+        port = int(os.getenv('API_PORT', '7000'))
+        host = os.getenv('API_HOST', '0.0.0.0')
+        logger.info(f"API-Server startet auf {host}:{port}")
+        # use_reloader=False ist wichtig im Thread-Kontext
+        app.run(host=host, port=port, debug=False, threaded=True, use_reloader=False)
+    except Exception as e:
+        logger.error(f"API-Server Fehler: {e}", exc_info=True)
+
+
+def start_helper_bot():
+    """Startet den Helper Bot in einem Hintergrund-Thread mit eigenem Event-Loop"""
+    try:
+        from helper_bot import HelperBot
+        helper_logger = logging.getLogger('HelperBot')
+
+        helper_token = BotConstants.SECONDARY_BOT_TOKEN
+        if not helper_token:
+            helper_logger.error("SECONDARY_BOT_TOKEN fehlt - Helper Bot wird nicht gestartet")
+            return
+
+        helper_logger.info("Helper Bot wird gestartet...")
+        helper_bot = HelperBot()
+        helper_bot.run(helper_token, reconnect=True)
+    except Exception as e:
+        logger.error(f"Helper Bot Fehler: {e}", exc_info=True)
+
+
 if __name__ == "__main__":
+    import threading
+
     # Performance-Tracking
     start_time = time.time()
-    
+
     logger.info("=== Bot-Start initialisiert ===")
-    
+
     # Initialisiere Token Balancer
     token_balancer = BotTokenBalancer(
         BotConstants.PRIMARY_BOT_TOKEN,
@@ -621,19 +655,24 @@ if __name__ == "__main__":
         BotConstants.RATE_LIMIT_COOL_DOWN,
         BotConstants.MAX_RETRIES
     )
-    
-    logger.info("Starting bot initialization")
-    
-    logger.info("TEST: MainBot-Logger wurde initialisiert!")
 
-    # Schreibe direkt in die Datei, um Rechte/Verzeichnis zu testen
-    with open(logs_dir / "mainbot.log", "a", encoding="utf-8") as f:
-        f.write("TEST: Direkter Dateizugriff funktioniert!\n")
+    logger.info("Starting bot initialization")
 
     for handler in logger.handlers:
         logger.info(f"Logger-Handler aktiv: {handler} (Typ: {type(handler)})")
-    
-    while True:  # Endlosschleife für automatische Wiederverbindungsversuche
+
+    # --- Starte API-Server als Daemon-Thread ---
+    api_thread = threading.Thread(target=start_api_server, name="APIServer", daemon=True)
+    api_thread.start()
+    logger.info("API-Server Thread gestartet")
+
+    # --- Starte Helper Bot als Daemon-Thread ---
+    helper_thread = threading.Thread(target=start_helper_bot, name="HelperBot", daemon=True)
+    helper_thread.start()
+    logger.info("Helper Bot Thread gestartet")
+
+    # --- Main Bot mit Reconnect-Logik (Hauptthread) ---
+    while True:
         try:
             # Reset Session-Token für neuen Start
             token_balancer.current_session_token = None
@@ -643,85 +682,75 @@ if __name__ == "__main__":
             logger.debug("Creating StatusBot instance")
             bot = StatusBot()
 
-            # Füge den Token-Balancer zum Bot hinzu, damit er über Befehle zugänglich ist
+            # Füge den Token-Balancer zum Bot hinzu
             bot.token_balancer = token_balancer
-            # Füge Bot-Referenz zum Token Balancer für History-Logging hinzu
             token_balancer.bot = bot
-            logger.info(f"Token Balancer successfully attached to bot: {token_balancer.get_status_text()}")
+            logger.info(f"Token Balancer attached: {token_balancer.get_status_text()}")
 
-            # Cogs werden jetzt in setup_hook() geladen - nicht hier!
             init_time = time.time() - init_start
-            logger.info(f"Bot instance created successfully (took {init_time:.2f}s)")
+            logger.info(f"Bot instance created (took {init_time:.2f}s)")
 
-            # Starte den Bot mit dem aktuellen Token
-            logger.info(f"Bot initialized, attempting to run ({token_balancer.get_status_text()})")
             total_init_time = time.time() - start_time
             logger.info(f"=== Gesamte Initialisierung: {total_init_time:.2f}s ===")
 
             current_token = token_balancer.get_current_token()
             token_name = "Primärer Bot" if current_token == token_balancer.primary_token else "Sekundärer Bot"
-            logger.info(f"🚀 Starte Bot mit: {token_name}")
+            logger.info(f"Starte Bot mit: {token_name}")
 
             bot.run(current_token, reconnect=True)
 
-            # Wenn bot.run() normal beendet wird (was ungewöhnlich ist)
-            logger.warning("⚠️ Bot beendet sich normal - Neustart in 5 Sekunden...")
+            # Wenn bot.run() normal beendet wird
+            logger.warning("Bot beendet sich normal - Neustart in 5 Sekunden...")
             time.sleep(5)
-            
+
         except discord.RateLimited as e:
-            # Bei Rate Limit, versuche mit dem sekundären Bot
-            logger.warning(f"🚨 Rate Limit erreicht! Retry nach: {e.retry_after}s")
+            logger.warning(f"Rate Limit erreicht! Retry nach: {e.retry_after}s")
             alternate_token = token_balancer.handle_rate_limit(e.retry_after)
 
             if alternate_token:
-                logger.info("✅ Wechsel zu anderem Bot - Neustart in 1s...")
+                logger.info("Wechsel zu anderem Bot - Neustart in 1s...")
                 time.sleep(1)
-                # Die Schleife wird den Bot mit dem neuen Token neu starten
             else:
-                logger.critical("❌ BEIDE Bots sind Rate-Limited! Warte vor Retry...")
-                time.sleep(min(e.retry_after, 60))  # Warte maximal 60 Sekunden
+                logger.critical("BEIDE Bots sind Rate-Limited! Warte vor Retry...")
+                time.sleep(min(e.retry_after, 60))
 
         except discord.LoginFailure:
-            logger.critical("❌ Login fehlgeschlagen! Token überprüfen!")
+            logger.critical("Login fehlgeschlagen! Token überprüfen!")
             alternate_token = token_balancer.handle_connection_error()
             if alternate_token:
-                logger.info("🔄 Versuche alternativen Token - Neustart in 2s...")
+                logger.info("Versuche alternativen Token - Neustart in 2s...")
                 time.sleep(2)
             else:
-                # Beide Tokens funktionieren nicht, längere Pause
-                logger.critical("❌ BEIDE Token ungültig! Warte 30s vor Retry...")
+                logger.critical("BEIDE Token ungültig! Warte 30s vor Retry...")
                 time.sleep(30)
 
         except (discord.ConnectionClosed, discord.GatewayNotFound, discord.HTTPException) as e:
-            logger.error(f"❌ Verbindungsfehler: {e}")
+            logger.error(f"Verbindungsfehler: {e}")
             alternate_token = token_balancer.handle_connection_error()
 
             if alternate_token:
-                logger.info("🔄 Wechsel zu anderem Bot - Neustart in 2s...")
+                logger.info("Wechsel zu anderem Bot - Neustart in 2s...")
                 time.sleep(2)
             else:
-                # Keine Token-Änderung, nur kurze Pause vor dem Neuversuch
                 wait_time = min(5 * token_balancer.retry_count, 30)
-                logger.warning(f"⏳ Verbindungsfehler - Retry in {wait_time}s...")
+                logger.warning(f"Verbindungsfehler - Retry in {wait_time}s...")
                 time.sleep(wait_time)
 
         except KeyboardInterrupt:
-            logger.info("⚠️ Bot wird durch Benutzer beendet (Ctrl+C)...")
-            break  # Beende die while-Schleife
+            logger.info("Bot wird durch Benutzer beendet (Ctrl+C)...")
+            break
 
         except Exception as e:
-            logger.exception(f"❌ Unerwarteter Fehler: {e}")
-            # Bei unbekannten Fehlern längere Pause und kein automatischer Token-Wechsel
-            logger.critical("⏳ Warte 60s vor Neustart wegen unerwartetem Fehler...")
+            logger.exception(f"Unerwarteter Fehler: {e}")
+            logger.critical("Warte 60s vor Neustart wegen unerwartetem Fehler...")
             time.sleep(60)
 
         finally:
-            # Cleanup: Bot ordentlich schließen falls noch offen
             try:
                 if 'bot' in locals() and not bot.is_closed():
-                    logger.info("🧹 Schließe Bot-Verbindung...")
+                    logger.info("Schließe Bot-Verbindung...")
                     asyncio.run(bot.close())
             except Exception as cleanup_error:
                 logger.debug(f"Fehler beim Bot-Cleanup (ignorierbar): {cleanup_error}")
 
-    logger.info("👋 Bot wurde vollständig beendet")
+    logger.info("Bot wurde vollständig beendet")

@@ -133,9 +133,12 @@ class AdvancedLogManager:
                 with gzip.open(f"{dest}.gz", 'wb') as f_out:
                     shutil.copyfileobj(f_in, f_out)
             os.remove(source)
-        except Exception as e:
-            # Fallback: normale Rotation ohne Kompression
-            shutil.move(source, dest)
+        except Exception:
+            try:
+                # Fallback: normale Rotation ohne Kompression
+                shutil.move(source, dest)
+            except Exception:
+                pass  # Rotation nicht kritisch - niemals Traceback in syslog schreiben
 
     def start_cleanup_thread(self):
         """Startet einen Background-Thread für regelmäßige Bereinigung"""
